@@ -1,0 +1,154 @@
+{
+  "name": "Workflow 2 - Agente de Enriquecimiento con IA",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ia-enrichment",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-w2-trigger",
+      "name": "Webhook: Necesita Plan de Mejora",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [240, 300],
+      "webhookId": "tp-ia-enrichment-webhook"
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "prompt_construido",
+              "value": "=Actúa como Asesor Técnico y Mentor Senior en Ingeniería de Software.\n\nEstudiante: {{ $json.body.estudiante_nombre }}\nPuesto solicitado: {{ $json.body.oferta_puesto }} en {{ $json.body.empresa }}\nCompatibilidad Determinista: {{ $json.body.scoring }}%\nHabilidades faltantes críticas detectadas: {{ $json.body.skills_faltantes.join(', ') }}\n\nPor favor genera:\n1. Diagnóstico breve de la brecha técnica.\n2. Ruta de aprendizaje acelerada en semanas para cubrir las skills faltantes.\n3. Idea de un proyecto práctico integrador para el portfolio del alumno."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-armar-prompt",
+      "name": "Armar Prompt con Skills Faltantes",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={{ $env.GEMINI_API_KEY }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contents\": [\n    {\n      \"parts\": [\n        {\n          \"text\": \"{{ $json.prompt_construido.replace(/\\n/g, '\\\\n').replace(/\"/g, '\\\"').trim() }}\"\n        }\n      ]\n    }\n  ]\n}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "node-llm-call",
+      "name": "HTTP Request: LLM Gemini / Ollama",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://backend:8000/postulaciones/{{ $('Webhook: Necesita Plan de Mejora').item.json.body.postulacion_id }}/ia-feedback",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"feedback\": \"{{ $json.candidates[0].content.parts[0].text.replace(/\\n/g, '\\\\n').replace(/\"/g, '\\\"').trim() }}\"\n}",
+        "options": {}
+      },
+      "id": "node-save-feedback",
+      "name": "HTTP Request: POST /postulaciones/{id}/ia-feedback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [920, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://n8n:5678/webhook/notificacion-reporte",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"postulacion_id\": {{ $('Webhook: Necesita Plan de Mejora').item.json.body.postulacion_id }},\n  \"estudiante_nombre\": \"{{ $('Webhook: Necesita Plan de Mejora').item.json.body.estudiante_nombre }}\",\n  \"oferta_puesto\": \"{{ $('Webhook: Necesita Plan de Mejora').item.json.body.oferta_puesto }}\",\n  \"feedback\": \"{{ $('HTTP Request: POST /postulaciones/{id}/ia-feedback').item.json.ia_feedback }}\"\n}",
+        "options": {}
+      },
+      "id": "node-trigger-workflow-3",
+      "name": "Disparar Workflow 3 (Notificación)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1140, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"enriquecido\",\n  \"postulacion_id\": {{ $('Webhook: Necesita Plan de Mejora').item.json.body.postulacion_id }},\n  \"feedback_guardado\": true\n}",
+        "options": {}
+      },
+      "id": "node-w2-respond",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1360, 300]
+    }
+  ],
+  "connections": {
+    "Webhook: Necesita Plan de Mejora": {
+      "main": [
+        [
+          {
+            "node": "Armar Prompt con Skills Faltantes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Armar Prompt con Skills Faltantes": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request: LLM Gemini / Ollama",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request: LLM Gemini / Ollama": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request: POST /postulaciones/{id}/ia-feedback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request: POST /postulaciones/{id}/ia-feedback": {
+      "main": [
+        [
+          {
+            "node": "Disparar Workflow 3 (Notificación)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Disparar Workflow 3 (Notificación)": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {}
+}

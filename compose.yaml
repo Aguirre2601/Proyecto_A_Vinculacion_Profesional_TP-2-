@@ -1,0 +1,77 @@
+services:
+  # Servicio 1: n8n (Motor de Automatización y Orquestación Low-Code)
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: tp_n8n
+    restart: unless-stopped
+    ports:
+      - "${N8N_PORT:-5678}:5678"
+    environment:
+      - N8N_HOST=${N8N_HOST:-localhost}
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - NODE_ENV=production
+      - WEBHOOK_URL=http://localhost:${N8N_PORT:-5678}/
+      - GENERIC_TIMEZONE=America/Argentina/Buenos_Aires
+      # Necesario para que el workflow 2 pueda leer $env.GEMINI_API_KEY
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - app-network
+
+  # Servicio 2: Backend (FastAPI + SQLite + Matcher Determinista)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: tp_backend
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    environment:
+      - DATABASE_URL=sqlite:///./data/vinculacion.db
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - CORS_ORIGINS=*
+    volumes:
+      # Montaje directo en carpeta del host para persistencia visible en Windows/Linux/Mac
+      - ./backend/data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - app-network
+
+  # Servicio 3: Frontend (Streamlit - Interfaz de Usuario)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: tp_frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-8501}:8501"
+    environment:
+      - BACKEND_API_URL=http://backend:8000
+      - N8N_WEBHOOK_URL=http://n8n:5678/webhook
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+    depends_on:
+      backend:
+        condition: service_healthy
+      n8n:
+        condition: service_started
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+    name: app-network
+
+volumes:
+  n8n_data:
+    name: tp_n8n_data

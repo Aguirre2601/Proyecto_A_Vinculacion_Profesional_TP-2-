@@ -1,0 +1,29 @@
+# Variables de entorno (nunca versionar claves reales)
+.env
+*.env
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# Base de datos local (SQLite)
+backend/data/*.db
+backend/data/*.sqlite
+backend/data/*.sqlite3
+
+# Datos locales de n8n
+n8n_data/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+*.log
+
+# Editores
+.vscode/
+.idea/

@@ -1,0 +1,201 @@
+{
+  "name": "Workflow 1 - Ingreso y Pre-scoring Determinista",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "postulacion",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-webhook-trigger",
+      "name": "Webhook: Nueva Postulacion",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [240, 300],
+      "webhookId": "tp-postulacion-webhook"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://backend:8000/postulaciones/match",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"estudiante_id\": {{ $json.body.estudiante_id }},\n  \"oferta_id\": {{ $json.body.oferta_id }}\n}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "node-http-match",
+      "name": "HTTP Request: POST /postulaciones/match",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.scoring }}",
+              "operation": "largerEqual",
+              "value2": 70
+            }
+          ]
+        }
+      },
+      "id": "node-if-scoring",
+      "name": "IF: Scoring >= 70%",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "resultado",
+              "value": "APTA_PARA_ENTREVISTA"
+            },
+            {
+              "name": "mensaje",
+              "value": "El candidato superó el umbral del 70% de compatibilidad técnica."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-set-apta",
+      "name": "Set: Apta para Entrevista",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [920, 200]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "resultado",
+              "value": "EN_DESARROLLO_FORMATIVO"
+            },
+            {
+              "name": "mensaje",
+              "value": "El candidato requiere plan de mejora. Se deriva automáticamente a Workflow 2 (Agente IA)."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-set-formativo",
+      "name": "Set: En Desarrollo Formativo",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [920, 420]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://n8n:5678/webhook/ia-enrichment",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"postulacion_id\": {{ $('HTTP Request: POST /postulaciones/match').item.json.postulacion_id }},\n  \"estudiante_id\": {{ $('HTTP Request: POST /postulaciones/match').item.json.estudiante_id }},\n  \"estudiante_nombre\": \"{{ $('HTTP Request: POST /postulaciones/match').item.json.estudiante_nombre }}\",\n  \"oferta_puesto\": \"{{ $('HTTP Request: POST /postulaciones/match').item.json.oferta_puesto }}\",\n  \"empresa\": \"{{ $('HTTP Request: POST /postulaciones/match').item.json.empresa }}\",\n  \"scoring\": {{ $('HTTP Request: POST /postulaciones/match').item.json.scoring }},\n  \"skills_coincidentes\": {{ JSON.stringify($('HTTP Request: POST /postulaciones/match').item.json.skills_coincidentes) }},\n  \"skills_faltantes\": {{ JSON.stringify($('HTTP Request: POST /postulaciones/match').item.json.skills_faltantes) }}\n}",
+        "options": {}
+      },
+      "id": "node-trigger-workflow-2",
+      "name": "Disparar Workflow 2 (Agente IA)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1140, 420]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"ok\",\n  \"postulacion_id\": {{ $('HTTP Request: POST /postulaciones/match').item.json.postulacion_id }},\n  \"scoring\": {{ $('HTTP Request: POST /postulaciones/match').item.json.scoring }},\n  \"estado\": \"{{ $('HTTP Request: POST /postulaciones/match').item.json.estado }}\",\n  \"detalles\": {{ JSON.stringify($json) }}\n}",
+        "options": {}
+      },
+      "id": "node-respond-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1360, 300]
+    }
+  ],
+  "connections": {
+    "Webhook: Nueva Postulacion": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request: POST /postulaciones/match",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request: POST /postulaciones/match": {
+      "main": [
+        [
+          {
+            "node": "IF: Scoring >= 70%",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Scoring >= 70%": {
+      "main": [
+        [
+          {
+            "node": "Set: Apta para Entrevista",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set: En Desarrollo Formativo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set: Apta para Entrevista": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set: En Desarrollo Formativo": {
+      "main": [
+        [
+          {
+            "node": "Disparar Workflow 2 (Agente IA)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Disparar Workflow 2 (Agente IA)": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {}
+}

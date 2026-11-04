@@ -1,0 +1,150 @@
+{
+  "name": "Workflow 3 - Notificación y Reporte Condicional",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "notificacion-reporte",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-w3-trigger",
+      "name": "Webhook: Enviar Notificación",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [240, 300],
+      "webhookId": "tp-notificacion-webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.body.feedback }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "id": "node-if-feedback-exists",
+      "name": "IF: ¿Tiene Feedback de IA Disponible?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "correo_asunto",
+              "value": "=Tu Plan Personalizado de Desarrollo Profesional - Postulación #{{ $json.body.postulacion_id }}"
+            },
+            {
+              "name": "correo_cuerpo_html",
+              "value": "=<div style='font-family: Arial, sans-serif;'><h2>Hola, {{ $json.body.estudiante_nombre }}</h2><p>Te acercamos el informe de diagnóstico de tu postulación para <strong>{{ $json.body.oferta_puesto }}</strong>:</p><div style='background:#f4f4f4; padding:15px; border-radius:5px;'><pre>{{ $json.body.feedback }}</pre></div><p>¡Muchos éxitos en tu formación continua!</p></div>"
+            },
+            {
+              "name": "estado_envio",
+              "value": "SIMULADO_ENVIADO_EXITOSAMENTE"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-simular-email",
+      "name": "Simulación: Enviar Correo al Alumno",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [720, 200]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "estado_envio",
+              "value": "OMITIDO_SIN_FEEDBACK"
+            },
+            {
+              "name": "motivo",
+              "value": "No se envió reporte porque la postulación aún no cuenta con retroalimentación del LLM."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-omitir-envio",
+      "name": "Omitir Envío",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [720, 420]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"completado\",\n  \"resultado\": {{ JSON.stringify($json) }}\n}",
+        "options": {}
+      },
+      "id": "node-w3-respond",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [960, 300]
+    }
+  ],
+  "connections": {
+    "Webhook: Enviar Notificación": {
+      "main": [
+        [
+          {
+            "node": "IF: ¿Tiene Feedback de IA Disponible?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: ¿Tiene Feedback de IA Disponible?": {
+      "main": [
+        [
+          {
+            "node": "Simulación: Enviar Correo al Alumno",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Omitir Envío",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simulación: Enviar Correo al Alumno": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Omitir Envío": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {}
+}
