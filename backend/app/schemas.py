@@ -1,5 +1,5 @@
 """
-models.py - Modelos Pydantic para validación estricta de esquemas
+schemas.py - Modelos Pydantic para validación estricta de esquemas.
 Proyecto A: Plataforma de Vinculación y Desarrollo Profesional
 """
 from typing import List, Optional

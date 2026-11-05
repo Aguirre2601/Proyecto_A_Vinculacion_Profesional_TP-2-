@@ -30,7 +30,7 @@ docker compose config --quiet    # validar compose.yaml
 
 # Verificación rápida
 curl http://localhost:8000/health
-python -m py_compile backend/main.py backend/models.py backend/database.py backend/services/matcher.py frontend/app.py
+python -m py_compile backend/app/main.py backend/app/basededatos.py backend/app/models.py backend/app/schemas.py backend/app/api/estudiantes.py backend/app/api/ofertas.py backend/app/api/postulaciones.py backend/app/api/health.py backend/app/services/matcher.py frontend/app.py
 python -c "import json,glob; [json.load(open(f,encoding='utf-8')) for f in glob.glob('n8n/*.json')]"
 ```
 
@@ -47,7 +47,7 @@ python -c "import json,glob; [json.load(open(f,encoding='utf-8')) for f in glob.
 - **Red Docker:** `app-network` (los servicios se resuelven por nombre: `http://backend:8000`, `http://n8n:5678`).
 - **Persistencia:** SQLite en `backend/data/vinculacion.db`, montado desde el host.
 - **Volumen n8n:** `tp_n8n_data`.
-- **Backend:** `/health` con healthcheck; el frontend espera `service_healthy`.
+- **Backend:** entrypoint `uvicorn app.main:app`; `/health` con healthcheck; el frontend espera `service_healthy`.
 - **CORS:** abierto (`*`) para permitir Streamlit y n8n.
 
 ### Flujo de datos
@@ -76,12 +76,20 @@ n8n: workflow 1 (pre-scoring) ──► workflow 2 (IA) ──► workflow 3 (no
 ├── README.md                    # Documentación del proyecto
 ├── BitacoraIA.md                # Bitácora de uso de IA
 ├── backend/
-│   ├── main.py                  # Endpoints FastAPI
-│   ├── models.py                # Esquemas Pydantic v2
-│   ├── database.py              # ORM SQLAlchemy + datos semilla
-│   ├── services/matcher.py      # Algoritmo determinista puro
+│   ├── app/
+│   │   ├── main.py              # Configuración FastAPI + CORS + routers
+│   │   ├── basededatos.py       # Engine, sesión, get_db e init_db
+│   │   ├── models.py            # Modelos ORM SQLAlchemy
+│   │   ├── schemas.py           # Esquemas Pydantic v2
+│   │   ├── api/
+│   │   │   ├── estudiantes.py   # Endpoints de estudiantes
+│   │   │   ├── ofertas.py       # Endpoints de ofertas
+│   │   │   ├── postulaciones.py # Matching, historial e ia-feedback
+│   │   │   └── health.py        # /health
+│   │   └── services/
+│   │       └── matcher.py       # Algoritmo determinista puro
 │   ├── data/                    # SQLite persistente (no versionar .db)
-│   ├── Dockerfile / requirements.txt / .dockerignore
+│   └── Dockerfile / requirements.txt / .dockerignore
 ├── frontend/
 │   ├── app.py                   # 5 vistas Streamlit + prompt IA en vivo
 │   ├── Dockerfile / requirements.txt / .dockerignore
@@ -137,7 +145,7 @@ n8n: workflow 1 (pre-scoring) ──► workflow 2 (IA) ──► workflow 3 (no
 - Python con `snake_case`, type hints y docstrings en español.
 - Pydantic v2: usar `min_length`/`max_length` (no `min_items`), `field_validator` y `from_attributes`.
 - Endpoints REST en español y sustantivos en plural (`/estudiantes`, `/ofertas`, `/postulaciones`).
-- La lógica determinista vive en `backend/services/matcher.py` y debe permanecer pura (sin DB ni HTTP).
+- La lógica determinista vive en `backend/app/services/matcher.py` y debe permanecer pura (sin DB ni HTTP).
 - Mantener el modo offline del frontend; no romper la demo sin backend.
 - No incluir secretos, tokens ni datos personales en el repositorio ni en `MEMORY.md`.
 
