@@ -1,6 +1,5 @@
 """
-basededatos.py - Configuración de SQLite, sesión y creación de tablas.
-Proyecto A: Plataforma de Vinculación y Desarrollo Profesional
+database.py - Configuración de SQLite, sesión y creación de tablas.
 """
 import os
 import json
@@ -17,7 +16,7 @@ if "sqlite" in DATABASE_URL:
         try:
             os.makedirs(db_dir, exist_ok=True)
         except Exception:
-            pass
+            pass #CHEQUEAR, no deberiamos manejar este posible error
 
 # create_engine con connect_args para SQLite multihilo seguro
 engine = create_engine(
@@ -32,7 +31,7 @@ Base = declarative_base()
 def init_db():
     """Crea las tablas en la base de datos si no existen y precarga datos iniciales."""
     # Import perezoso para evitar el ciclo basededatos <-> models
-    from app import models
+    from backend.app.database import models
 
     Base.metadata.create_all(bind=engine)
 

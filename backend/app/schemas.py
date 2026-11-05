@@ -1,6 +1,6 @@
 """
-schemas.py - Modelos Pydantic para validación estricta de esquemas.
-Proyecto A: Plataforma de Vinculación y Desarrollo Profesional
+schemas.py - Modelos Pydantic para validación estricta de esquemas
+Define qué entra y sale por la API (EstudianteCreate, EstudianteResponse, MatchRequest), con validaciones, tipos y documentación automática en /docs.
 """
 from typing import List, Optional
 from datetime import datetime

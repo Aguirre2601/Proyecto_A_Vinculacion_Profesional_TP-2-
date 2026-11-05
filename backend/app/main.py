@@ -1,6 +1,5 @@
 """
 main.py - Configuración de la aplicación FastAPI.
-Proyecto A: Plataforma de Vinculación y Desarrollo Profesional
 Solo se encarga de crear la app, CORS, ciclo de vida y registrar los routers.
 """
 from contextlib import asynccontextmanager
@@ -9,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import estudiantes, ofertas, postulaciones, health
-from app.basededatos import init_db
+from backend.app.database.database import init_db
 
 
 @asynccontextmanager

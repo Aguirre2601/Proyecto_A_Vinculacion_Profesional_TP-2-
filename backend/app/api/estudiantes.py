@@ -8,8 +8,8 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.basededatos import get_db
-from app.models import EstudianteDB
+from backend.app.database.database import get_db
+from backend.app.database.models import EstudianteDB
 from app.schemas import EstudianteCreate, EstudianteResponse
 
 router = APIRouter(prefix="/estudiantes", tags=["Estudiantes"])
