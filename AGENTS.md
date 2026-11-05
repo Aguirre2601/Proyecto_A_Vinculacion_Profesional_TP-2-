@@ -5,7 +5,7 @@
 **Plataforma de Vinculación y Desarrollo Profesional (Proyecto A)** — sistema de matching entre estudiantes universitarios y ofertas laborales.
 
 - **Objetivo:** calcular la compatibilidad técnica de forma determinista, detectar brechas de habilidades, generar un plan formativo con IA y automatizar el flujo con n8n.
-- **Stack:** Streamlit (frontend) + FastAPI/SQLAlchemy/SQLite (backend) + n8n (automatización) + Google Gemini 1.5 Flash (IA opcional).
+- **Stack:** Streamlit (frontend) + FastAPI/SQLAlchemy/SQLite (backend) + n8n (automatización) + Google Gemini 3.8 Flash (IA opcional).
 - **Principio central:** el scoring **nunca** lo calcula un LLM. La IA solo redacta el plan de mejora a partir de las habilidades faltantes.
 - **Estado:** funcional con Docker Compose (3 servicios). El frontend tiene modo autónomo en memoria si el backend no responde.
 
@@ -73,7 +73,7 @@ n8n: workflow 1 (pre-scoring) ──► workflow 2 (IA) ──► workflow 3 (no
 ├── .gitignore                   # Excluye .env, SQLite y cachés
 ├── AGENTS.md                    # Reglas para agentes (este archivo)
 ├── MEMORY.md                    # Estado y decisiones entre sesiones
-├── README.md / README1.md       # Documentación del proyecto
+├── README.md                    # Documentación del proyecto
 ├── BitacoraIA.md                # Bitácora de uso de IA
 ├── backend/
 │   ├── main.py                  # Endpoints FastAPI
@@ -85,12 +85,10 @@ n8n: workflow 1 (pre-scoring) ──► workflow 2 (IA) ──► workflow 3 (no
 ├── frontend/
 │   ├── app.py                   # 5 vistas Streamlit + prompt IA en vivo
 │   ├── Dockerfile / requirements.txt / .dockerignore
-├── n8n/
-│   ├── workflow_1_prescoring.json
-│   ├── workflow_2_enriquecimiento_ia.json
-│   └── workflow_3_notificacion_reporte.json
-└── prompts/
-    └── prompt_maestro_llm.md    # Referencia del prompt (consolidado en este archivo)
+└── n8n/
+    ├── workflow_1_prescoring.json
+    ├── workflow_2_enriquecimiento_ia.json
+    └── workflow_3_notificacion_reporte.json
 ```
 
 ## Reglas de negocio
@@ -106,10 +104,10 @@ n8n: workflow 1 (pre-scoring) ──► workflow 2 (IA) ──► workflow 3 (no
 
 ## Integración con IA
 
-- **Proveedor:** Google Gemini 1.5 Flash, clave opcional en `GEMINI_API_KEY` (`.env`).
+- **Proveedor:** Google Gemini 3.8 Flash, clave opcional en `GEMINI_API_KEY` (`.env`) y modelo configurable con `GEMINI_MODEL` (default `gemini-3.8-flash`).
 - **Sin clave o sin red:** el frontend usa una plantilla pedagógica offline; la app debe seguir funcionando.
 - **El LLM nunca calcula el scoring ni inventa habilidades.** Solo redacta el plan.
-- **Prompt en vivo:** está embebido en `frontend/app.py` (vista de matching). `prompts/prompt_maestro_llm.md` es solo referencia.
+- **Prompt en vivo:** está embebido en `frontend/app.py` (vista de matching); su especificación está resumida en este archivo.
 - **Especificación del prompt (resumen):**
   - Rol: Asesor Técnico de Empleabilidad y Mentor Senior en Ingeniería de Software.
   - Variables: estudiante, carrera, puesto, empresa, scoring, skills coincidentes y **skills faltantes**.

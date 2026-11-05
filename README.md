@@ -49,7 +49,7 @@ Diseñar e implementar una arquitectura desacoplada que:
 | **Backend** | FastAPI + SQLAlchemy (Python) | `8000` | API REST, validación de datos, cálculo determinista, persistencia SQLite. |
 | **Base de datos** | SQLite | — | Persistencia en `backend/data/vinculacion.db` (volumen del host). |
 | **Automatización** | n8n | `5678` | Orquestación Low-Code mediante 3 workflows encadenados. |
-| **Motor de IA** | Google Gemini 1.5 Flash (opcional) | — | Generación del plan formativo. Si no hay clave, se usa una plantilla offline. |
+| **Motor de IA** | Google Gemini 2.5 Flash (opcional) | — | Generación del plan formativo. Si no hay clave, se usa una plantilla offline. |
 
 ### Flujo funcional
 
@@ -270,7 +270,7 @@ Los workflows **no se importan automáticamente**. Pasos:
   - Ruta de aprendizaje acelerada.
   - Proyecto integrador de portfolio.
   - Recursos gratuitos recomendados.
-- Uso de Gemini 1.5 Flash si hay clave.
+- Uso de Gemini 2.5 Flash si hay clave.
 - Fallback offline con plantilla pedagógica si no hay clave o falla la red.
 - Persistencia del plan en SQLite mediante `POST /postulaciones/{id}/ia-feedback`.
 

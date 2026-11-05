@@ -13,8 +13,9 @@ services:
       - NODE_ENV=production
       - WEBHOOK_URL=http://localhost:${N8N_PORT:-5678}/
       - GENERIC_TIMEZONE=America/Argentina/Buenos_Aires
-      # Necesario para que el workflow 2 pueda leer $env.GEMINI_API_KEY
+      # Necesario para que el workflow 2 pueda leer $env.GEMINI_API_KEY y $env.GEMINI_MODEL
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-3.8-flash}
       - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
     volumes:
       - n8n_data:/home/node/.n8n
@@ -59,6 +60,7 @@ services:
       - BACKEND_API_URL=http://backend:8000
       - N8N_WEBHOOK_URL=http://n8n:5678/webhook
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-3.8-flash}
     depends_on:
       backend:
         condition: service_healthy

@@ -106,6 +106,8 @@ gemini_env_key = os.getenv("GEMINI_API_KEY", "")
 if gemini_env_key == "tu_api_key_de_gemini_aqui":
     gemini_env_key = ""
 
+gemini_model = os.getenv("GEMINI_MODEL", "gemini-3.8-flash").strip() or "gemini-3.8-flash"
+
 st.sidebar.divider()
 st.sidebar.subheader("🤖 Motor de IA (Google Gemini)")
 gemini_key_input = st.sidebar.text_input(
@@ -116,7 +118,7 @@ gemini_key_input = st.sidebar.text_input(
 )
 
 if gemini_key_input:
-    st.sidebar.success("🟢 Gemini 1.5 Flash Conectado")
+    st.sidebar.success(f"🟢 {gemini_model} Conectado")
 else:
     st.sidebar.info("🟡 Modo IA Offline (Plantilla Estructurada)")
 
@@ -380,7 +382,7 @@ if menu == "🎯 Postulación y Matching":
                                     f"### Mini Proyecto Integrador de Portfolio\n"
                                     f"### Recursos y Cursos Gratuitos Recomendados\n"
                                 )
-                                gem_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={gemini_key_input.strip()}"
+                                gem_url = f"https://generativelanguage.googleapis.com/v1beta/models/{gemini_model}:generateContent?key={gemini_key_input.strip()}"
                                 gem_res = requests.post(
                                     gem_url,
                                     json={"contents": [{"parts": [{"text": prompt_maestro}]}]},
@@ -389,7 +391,7 @@ if menu == "🎯 Postulación y Matching":
                                 if gem_res.status_code == 200:
                                     g_data = gem_res.json()
                                     plan_ia = g_data["candidates"][0]["content"]["parts"][0]["text"]
-                                    origen = "Google Gemini 1.5 Flash (En vivo)"
+                                    origen = f"Google Gemini {gemini_model} (En vivo)"
                             except Exception as ex_gem:
                                 st.warning(f"Aviso: No se pudo conectar con la API de Gemini ({str(ex_gem)}). Se utiliza el generador offline de resguardo.")
 
