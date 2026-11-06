@@ -94,6 +94,7 @@ n8n: workflow 1 (pre-scoring) ──► workflow 2 (IA) ──► workflow 3 (no
 │   ├── app.py                   # 5 vistas Streamlit + prompt IA en vivo
 │   ├── Dockerfile / requirements.txt / .dockerignore
 └── n8n/
+    ├── readme.md                    # Documentación de los workflows
     ├── workflow_1_prescoring.json
     ├── workflow_2_enriquecimiento_ia.json
     └── workflow_3_notificacion_reporte.json

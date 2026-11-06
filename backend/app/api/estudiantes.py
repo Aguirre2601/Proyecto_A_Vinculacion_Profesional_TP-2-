@@ -1,6 +1,5 @@
 """
 api/estudiantes.py - Endpoints de gestión de estudiantes.
-Proyecto A: Plataforma de Vinculación y Desarrollo Profesional
 """
 import json
 from typing import List

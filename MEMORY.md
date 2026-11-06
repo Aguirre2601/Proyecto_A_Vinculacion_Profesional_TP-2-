@@ -9,6 +9,7 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - Archivos viejos de `backend/` eliminados (`main.py`, `models.py`, `database.py`, `services/`). Dockerfile usa `uvicorn app.main:app`.
 - Modelo de IA unificado en `GEMINI_MODEL=gemini-3.8-flash` (`.env`, `.env.example`, `compose.yaml`, `frontend/app.py` y workflow 2 de n8n).
 - `README1.md` y `prompts/` fueron eliminados; `AGENTS.md` ya no los referencia.
+- `n8n/readme.md` documenta los 3 workflows (evento, datos, validación, respuesta y fallas); cada descripción queda bajo 500 palabras.
 - Validado: backend reconstruido, contenedor healthy y endpoints `/estudiantes`, `/ofertas`, `/postulaciones/match` y `/postulaciones` responden 200.
 
 ## Decisiones (y por qué)
