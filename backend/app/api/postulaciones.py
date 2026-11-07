@@ -8,8 +8,8 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from backend.app.database.database import get_db
-from backend.app.database.models import EstudianteDB, OfertaDB, PostulacionDB
+from app.database.database import get_db
+from app.database.models import EstudianteDB, OfertaDB, PostulacionDB
 from app.schemas import (
     MatchRequest,
     MatchResponse,

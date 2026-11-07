@@ -8,8 +8,8 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
-from backend.app.database.database import get_db
-from backend.app.database.models import OfertaDB
+from app.database.database import get_db
+from app.database.models import OfertaDB
 from app.schemas import OfertaCreate, OfertaResponse
 
 router = APIRouter(prefix="/ofertas", tags=["Ofertas"])

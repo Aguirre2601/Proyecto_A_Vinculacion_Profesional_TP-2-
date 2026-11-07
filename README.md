@@ -49,7 +49,7 @@ Diseñar e implementar una arquitectura desacoplada que:
 | **Backend** | FastAPI + SQLAlchemy (Python) | `8000` | API REST, validación de datos, cálculo determinista, persistencia SQLite. |
 | **Base de datos** | SQLite | — | Persistencia en `backend/data/vinculacion.db` (volumen del host). |
 | **Automatización** | n8n | `5678` | Orquestación Low-Code mediante 3 workflows encadenados. |
-| **Motor de IA** | Google Gemini 2.5 Flash (opcional) | — | Generación del plan formativo. Si no hay clave, se usa una plantilla offline. |
+| **Motor de IA** | Google Gemini (opcional, configurable con `GEMINI_MODEL`) | — | Generación del plan formativo con `gemini-3.8-flash` por defecto. Si no hay clave, se usa una plantilla offline. |
 
 ### Flujo funcional
 
@@ -130,9 +130,10 @@ Editar `.env` y, si se desea usar IA en vivo, completar:
 
 ```env
 GEMINI_API_KEY=TU_CLAVE_DE_GEMINI
+GEMINI_MODEL=gemini-3.8-flash
 ```
 
-> Si se deja vacía, el sistema usará automáticamente el plan formativo offline.
+> Si `GEMINI_API_KEY` se deja vacía, el sistema usará automáticamente el plan formativo offline. `GEMINI_MODEL` es opcional y su valor por defecto es `gemini-3.8-flash`.
 
 ### 6.3 Construir las imágenes
 
@@ -270,7 +271,7 @@ Los workflows **no se importan automáticamente**. Pasos:
   - Ruta de aprendizaje acelerada.
   - Proyecto integrador de portfolio.
   - Recursos gratuitos recomendados.
-- Uso de Gemini 2.5 Flash si hay clave.
+- Uso de Gemini (`GEMINI_MODEL`, por defecto `gemini-3.8-flash`) si hay clave.
 - Fallback offline con plantilla pedagógica si no hay clave o falla la red.
 - Persistencia del plan en SQLite mediante `POST /postulaciones/{id}/ia-feedback`.
 
@@ -336,35 +337,47 @@ Proyecto_A_Vinculacion_Profesional_TP/
 ├── .gitignore                    # Exclusión de .env, bases SQLite, cachés, etc.
 ├── BitacoraIA.md                 # Bitácora de uso de IA del proyecto
 ├── compose.yaml                  # Orquestación Docker: n8n + backend + frontend
-├── README.md                     # Documentación original del proyecto
-├── README1.md                    # Este documento
+├── README.md                     # Documentación del proyecto
 │
 ├── backend/                      # Microservicio FastAPI
 │   ├── .dockerignore             # Excluye cachés, data local y .env del build
 │   ├── Dockerfile                # Imagen Python 3.11 + Uvicorn
 │   ├── requirements.txt          # fastapi, uvicorn, pydantic, sqlalchemy, requests...
-│   ├── main.py                   # Endpoints REST y configuración de FastAPI
-│   ├── models.py                 # Esquemas Pydantic de validación
-│   ├── database.py               # SQLAlchemy, modelos ORM y datos semilla
-│   ├── data/                     # Persistencia SQLite montada desde el host
-│   │   └── .gitkeep              # Conserva la carpeta en el repositorio
-│   └── services/
-│       ├── __init__.py           # Exporta el matcher
-│       └── matcher.py            # Algoritmo determinista de scoring y brechas
+│   ├── app/
+│   │   ├── main.py               # Configuración FastAPI, CORS y routers
+│   │   ├── schemas.py            # Esquemas Pydantic v2
+│   │   ├── database/
+│   │   │   ├── database.py       # Engine, sesión, get_db e init_db
+│   │   │   └── models.py         # Modelos ORM SQLAlchemy
+│   │   ├── api/
+│   │   │   ├── estudiantes.py    # Endpoints de estudiantes
+│   │   │   ├── ofertas.py        # Endpoints de ofertas
+│   │   │   ├── postulaciones.py  # Matching, historial e ia-feedback
+│   │   │   └── health.py         # /health
+│   │   └── services/
+│   │       └── matcher.py        # Algoritmo determinista puro
+│   └── data/                     # Persistencia SQLite montada desde el host
+│       └── .gitkeep              # Conserva la carpeta en el repositorio
 │
 ├── frontend/                     # Interfaz Streamlit
 │   ├── .dockerignore             # Excluye cachés y .env del build
 │   ├── Dockerfile                # Imagen Python 3.11 + Streamlit
-│   ├── requirements.txt          # streamlit, requests, python-dotenv
-│   └── app.py                    # Vistas: matching, estudiantes, ofertas, historial, info
+│   ├── requirements.txt          # streamlit>=1.36.0, requests, python-dotenv
+│   ├── app.py                    # Punto de entrada: configuración, sidebar y navegación
+│   ├── common.py                 # Semillas, estado de sesión y helpers compartidos
+│   └── pages/
+│       ├── main_page.py          # Página de bienvenida
+│       ├── postulacion.py        # Vista de matching y plan IA
+│       ├── estudiantes.py        # Vista de gestión de estudiantes
+│       ├── ofertas.py            # Vista del catálogo de ofertas
+│       ├── historial.py          # Vista del historial de postulaciones
+│       └── acerca.py             # Vista de arquitectura del sistema
 │
-├── n8n/                          # Workflows exportados de n8n (importar manualmente)
-│   ├── workflow_1_prescoring.json
-│   ├── workflow_2_enriquecimiento_ia.json
-│   └── workflow_3_notificacion_reporte.json
-│
-└── prompts/
-    └── prompt_maestro_llm.md     # Prompt maestro y ejemplo few-shot para el LLM
+└── n8n/                          # Workflows exportados de n8n (importar manualmente)
+    ├── readme.md                 # Documentación de los workflows
+    ├── workflow_1_prescoring.json
+    ├── workflow_2_enriquecimiento_ia.json
+    └── workflow_3_notificacion_reporte.json
 ```
 
 ### Descripción de archivos clave
@@ -372,13 +385,15 @@ Proyecto_A_Vinculacion_Profesional_TP/
 | Archivo | Responsabilidad |
 |---|---|
 | `compose.yaml` | Define los 3 servicios, la red `app-network`, el volumen `tp_n8n_data`, puertos, variables de entorno y healthcheck del backend. |
-| `backend/main.py` | Implementa los 5 endpoints obligatorios más endpoints de consulta y `/health`. |
-| `backend/database.py` | Crea las tablas `estudiantes`, `ofertas` y `postulaciones`, y precarga datos semilla. |
-| `backend/services/matcher.py` | Función pura `calculate_match()`; no depende de FastAPI ni de la base de datos. |
-| `backend/models.py` | Validación de emails, longitudes y listas de habilidades con Pydantic v2. |
-| `frontend/app.py` | Interfaz con 5 vistas y lógica de fallback si el backend está caído. |
-| `prompts/prompt_maestro_llm.md` | Especificación del prompt y salida esperada del LLM. |
-| `.env.example` | Puertos, URLs y clave opcional de Gemini. |
+| `backend/app/main.py` | Configura FastAPI, CORS, ciclo de vida y registra los routers. |
+| `backend/app/database/database.py` | Crea las tablas `estudiantes`, `ofertas` y `postulaciones`, y precarga datos semilla. |
+| `backend/app/database/models.py` | Modelos ORM de SQLAlchemy y serialización JSON de skills. |
+| `backend/app/schemas.py` | Validación de emails, longitudes y listas de habilidades con Pydantic v2. |
+| `backend/app/services/matcher.py` | Función pura de scoring y detección de brechas; no depende de FastAPI ni de la base de datos. |
+| `frontend/app.py` | Punto de entrada: configuración global, sidebar y navegación con `st.navigation`. |
+| `frontend/pages/` | Una vista por archivo (`main_page`, `postulacion`, `estudiantes`, `ofertas`, `historial`, `acerca`), cada una con `render()`. |
+| `frontend/common.py` | Datos semilla, estado de sesión y helpers de API compartidos. |
+| `.env.example` | Puertos, URLs, clave opcional de Gemini y modelo (`GEMINI_MODEL`). |
 
 ---
 
@@ -393,6 +408,7 @@ Proyecto_A_Vinculacion_Profesional_TP/
 | `DATABASE_URL` | `sqlite:///./data/vinculacion.db` | Cadena de conexión de SQLAlchemy. |
 | `BACKEND_API_URL` | `http://backend:8000` | URL interna del backend usada por el frontend. |
 | `GEMINI_API_KEY` | *(vacío)* | Clave opcional de Google Gemini. |
+| `GEMINI_MODEL` | `gemini-3.8-flash` | Modelo de Gemini usado por el frontend y n8n. |
 
 ---
 

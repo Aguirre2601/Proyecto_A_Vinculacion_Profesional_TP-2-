@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import estudiantes, ofertas, postulaciones, health
-from backend.app.database.database import init_db
+from app.database.database import init_db
 
 
 @asynccontextmanager

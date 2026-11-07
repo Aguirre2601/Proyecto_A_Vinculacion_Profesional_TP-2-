@@ -6,7 +6,7 @@ import json
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, Float, DateTime, Text
 
-from backend.app.database.database import Base
+from app.database.database import Base
 
 
 class EstudianteDB(Base):

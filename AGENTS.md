@@ -78,9 +78,10 @@ n8n: workflow 1 (pre-scoring) ──► workflow 2 (IA) ──► workflow 3 (no
 ├── backend/
 │   ├── app/
 │   │   ├── main.py              # Configuración FastAPI + CORS + routers
-│   │   ├── basededatos.py       # Engine, sesión, get_db e init_db
-│   │   ├── models.py            # Modelos ORM SQLAlchemy
 │   │   ├── schemas.py           # Esquemas Pydantic v2
+│   │   ├── database/
+│   │   │   ├── database.py      # Engine, sesión, get_db e init_db
+│   │   │   └── models.py        # Modelos ORM SQLAlchemy
 │   │   ├── api/
 │   │   │   ├── estudiantes.py   # Endpoints de estudiantes
 │   │   │   ├── ofertas.py       # Endpoints de ofertas
@@ -91,7 +92,15 @@ n8n: workflow 1 (pre-scoring) ──► workflow 2 (IA) ──► workflow 3 (no
 │   ├── data/                    # SQLite persistente (no versionar .db)
 │   └── Dockerfile / requirements.txt / .dockerignore
 ├── frontend/
-│   ├── app.py                   # 5 vistas Streamlit + prompt IA en vivo
+│   ├── app.py                   # Punto de entrada: config, sidebar y router
+│   ├── common.py                # Datos semilla, estado y helpers compartidos
+│   ├── pages/
+│   │   ├── main_page.py         # Página de bienvenida
+│   │   ├── postulacion.py       # Vista 1: matching y plan IA
+│   │   ├── estudiantes.py       # Vista 2: gestión de estudiantes
+│   │   ├── ofertas.py           # Vista 3: catálogo de ofertas
+│   │   ├── historial.py         # Vista 4: historial y planes IA
+│   │   └── acerca.py            # Vista 5: arquitectura del sistema
 │   ├── Dockerfile / requirements.txt / .dockerignore
 └── n8n/
     ├── readme.md                    # Documentación de los workflows
@@ -116,7 +125,7 @@ n8n: workflow 1 (pre-scoring) ──► workflow 2 (IA) ──► workflow 3 (no
 - **Proveedor:** Google Gemini 3.8 Flash, clave opcional en `GEMINI_API_KEY` (`.env`) y modelo configurable con `GEMINI_MODEL` (default `gemini-3.8-flash`).
 - **Sin clave o sin red:** el frontend usa una plantilla pedagógica offline; la app debe seguir funcionando.
 - **El LLM nunca calcula el scoring ni inventa habilidades.** Solo redacta el plan.
-- **Prompt en vivo:** está embebido en `frontend/app.py` (vista de matching); su especificación está resumida en este archivo.
+- **Prompt en vivo:** está embebido en `frontend/pages/postulacion.py`; su especificación está resumida en este archivo.
 - **Especificación del prompt (resumen):**
   - Rol: Asesor Técnico de Empleabilidad y Mentor Senior en Ingeniería de Software.
   - Variables: estudiante, carrera, puesto, empresa, scoring, skills coincidentes y **skills faltantes**.
@@ -148,6 +157,7 @@ n8n: workflow 1 (pre-scoring) ──► workflow 2 (IA) ──► workflow 3 (no
 - Endpoints REST en español y sustantivos en plural (`/estudiantes`, `/ofertas`, `/postulaciones`).
 - La lógica determinista vive en `backend/app/services/matcher.py` y debe permanecer pura (sin DB ni HTTP).
 - Mantener el modo offline del frontend; no romper la demo sin backend.
+- Cada vista del frontend vive en `frontend/pages/` y expone `render()`; `app.py` configura, dibuja la sidebar y define la navegación con `st.navigation`/`st.Page` (cada página con `url_path` único).
 - No incluir secretos, tokens ni datos personales en el repositorio ni en `MEMORY.md`.
 
 ## Forma de trabajar

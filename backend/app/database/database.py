@@ -31,7 +31,7 @@ Base = declarative_base()
 def init_db():
     """Crea las tablas en la base de datos si no existen y precarga datos iniciales."""
     # Import perezoso para evitar el ciclo basededatos <-> models
-    from backend.app.database import models
+    from app.database import models
 
     Base.metadata.create_all(bind=engine)
 
