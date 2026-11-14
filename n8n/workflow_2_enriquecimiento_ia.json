@@ -12,7 +12,10 @@
       "name": "Webhook: Necesita Plan de Mejora",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1.1,
-      "position": [240, 300],
+      "position": [
+        240,
+        300
+      ],
       "webhookId": "tp-ia-enrichment-webhook"
     },
     {
@@ -31,24 +34,38 @@
       "name": "Armar Prompt con Skills Faltantes",
       "type": "n8n-nodes-base.set",
       "typeVersion": 2,
-      "position": [460, 300]
+      "position": [
+        460,
+        300
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={{ $env.GEMINI_API_KEY }}",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"contents\": [\n    {\n      \"parts\": [\n        {\n          \"text\": \"{{ $json.prompt_construido.replace(/\\n/g, '\\\\n').replace(/\"/g, '\\\"').trim() }}\"\n        }\n      ]\n    }\n  ]\n}",
+        "jsonBody": "={{ JSON.stringify({ contents: [{ parts: [{ text: $json.prompt_construido }] }] }) }}",
         "options": {
-          "timeout": 20000
+          "timeout": 60000
         }
       },
       "id": "node-llm-call",
       "name": "HTTP Request: LLM Gemini / Ollama",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [680, 300]
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "tRgxbBB45n5mrOcZ",
+          "name": "Header Auth account"
+        }
+      },
+      "position": [
+        680,
+        300
+      ]
     },
     {
       "parameters": {
@@ -56,14 +73,19 @@
         "url": "=http://backend:8000/postulaciones/{{ $('Webhook: Necesita Plan de Mejora').item.json.body.postulacion_id }}/ia-feedback",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"feedback\": \"{{ $json.candidates[0].content.parts[0].text.replace(/\\n/g, '\\\\n').replace(/\"/g, '\\\"').trim() }}\"\n}",
-        "options": {}
+        "jsonBody": "={{ JSON.stringify({ feedback: $json.candidates[0].content.parts[0].text }) }}",
+        "options": {
+          "timeout": 10000
+        }
       },
       "id": "node-save-feedback",
       "name": "HTTP Request: POST /postulaciones/{id}/ia-feedback",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [920, 300]
+      "position": [
+        920,
+        300
+      ]
     },
     {
       "parameters": {
@@ -71,26 +93,32 @@
         "url": "http://n8n:5678/webhook/notificacion-reporte",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"postulacion_id\": {{ $('Webhook: Necesita Plan de Mejora').item.json.body.postulacion_id }},\n  \"estudiante_nombre\": \"{{ $('Webhook: Necesita Plan de Mejora').item.json.body.estudiante_nombre }}\",\n  \"oferta_puesto\": \"{{ $('Webhook: Necesita Plan de Mejora').item.json.body.oferta_puesto }}\",\n  \"feedback\": \"{{ $('HTTP Request: POST /postulaciones/{id}/ia-feedback').item.json.ia_feedback }}\"\n}",
+        "jsonBody": "={{ JSON.stringify({ postulacion_id: $('Webhook: Necesita Plan de Mejora').item.json.body.postulacion_id, estudiante_nombre: $('Webhook: Necesita Plan de Mejora').item.json.body.estudiante_nombre, oferta_puesto: $('Webhook: Necesita Plan de Mejora').item.json.body.oferta_puesto, feedback: $('HTTP Request: POST /postulaciones/{id}/ia-feedback').item.json.ia_feedback }) }}",
         "options": {}
       },
       "id": "node-trigger-workflow-3",
       "name": "Disparar Workflow 3 (Notificación)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [1140, 300]
+      "position": [
+        1140,
+        300
+      ]
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={\n  \"status\": \"enriquecido\",\n  \"postulacion_id\": {{ $('Webhook: Necesita Plan de Mejora').item.json.body.postulacion_id }},\n  \"feedback_guardado\": true\n}",
+        "responseBody": "={{ JSON.stringify({ status: \"enriquecido\", postulacion_id: $('Webhook: Necesita Plan de Mejora').item.json.body.postulacion_id, feedback_guardado: true, ia_feedback: $('HTTP Request: POST /postulaciones/{id}/ia-feedback').item.json.ia_feedback, ia_origen: \"Google Gemini gemini-3.1-flash-lite\" }) }}",
         "options": {}
       },
       "id": "node-w2-respond",
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [1360, 300]
+      "position": [
+        1360,
+        300
+      ]
     }
   ],
   "connections": {

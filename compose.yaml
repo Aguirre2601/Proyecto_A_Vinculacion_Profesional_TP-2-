@@ -13,9 +13,6 @@ services:
       - NODE_ENV=production
       - WEBHOOK_URL=http://localhost:${N8N_PORT:-5678}/
       - GENERIC_TIMEZONE=America/Argentina/Buenos_Aires
-      # Necesario para que el workflow 2 pueda leer $env.GEMINI_API_KEY
-      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
-      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
     volumes:
       - n8n_data:/home/node/.n8n
     networks:
@@ -32,7 +29,6 @@ services:
       - "${BACKEND_PORT:-8000}:8000"
     environment:
       - DATABASE_URL=sqlite:///./data/vinculacion.db
-      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - CORS_ORIGINS=*
     volumes:
       # Montaje directo en carpeta del host para persistencia visible en Windows/Linux/Mac
@@ -58,7 +54,6 @@ services:
     environment:
       - BACKEND_API_URL=http://backend:8000
       - N8N_WEBHOOK_URL=http://n8n:5678/webhook
-      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
     depends_on:
       backend:
         condition: service_healthy
