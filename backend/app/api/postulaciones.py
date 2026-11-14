@@ -11,29 +11,27 @@ from sqlalchemy.orm import Session
 from app.database.database import get_db
 from app.database.models import EstudianteDB, OfertaDB, PostulacionDB
 from app.schemas import (
-    MatchRequest,
     MatchResponse,
+    MatchRegistroRequest,
     IAFeedbackRequest,
     IAFeedbackResponse,
     PostulacionResponse,
 )
-from app.services.matcher import calculate_match
+
 
 router = APIRouter(prefix="/postulaciones", tags=["Postulaciones"])
 
 
 @router.post(
-    "/match",
+    "/registrar",
     response_model=MatchResponse,
-    status_code=status.HTTP_200_OK,
-    summary="4. Ejecutar match determinista entre estudiante y oferta"
+    status_code=status.HTTP_201_CREATED,
+    summary="Persistir un match ya calculado por n8n (Workflow 1)"
 )
-def calcular_postulacion_match(payload: MatchRequest, db: Session = Depends(get_db)):
+def registrar_postulacion(payload: MatchRegistroRequest, db: Session = Depends(get_db)):
     """
-    Calcula determinísticamente la compatibilidad:
-    Scoring = (|Skills Estudiante ∩ Skills Oferta| / |Skills Oferta|) * 100
-    Determina si la postulación está 'Apta para entrevista' (>= 70%) o 'En desarrollo formativo' (< 70%).
-    Persiste el resultado en SQLite para trazabilidad.
+    Guarda en SQLite un match calculado externamente por n8n.
+    No recalcula el scoring: confía en los valores deterministas enviados por el Workflow 1.
     """
     estudiante = db.query(EstudianteDB).filter(EstudianteDB.id == payload.estudiante_id).first()
     if not estudiante:
@@ -49,20 +47,13 @@ def calcular_postulacion_match(payload: MatchRequest, db: Session = Depends(get_
             detail=f"Oferta con ID {payload.oferta_id} no encontrada"
         )
 
-    # Invocación de la función determinista pura
-    match_result = calculate_match(estudiante.skills, oferta.skills_requeridas)
-
-    # Condición de negocio
-    estado = "Apta para entrevista" if match_result.scoring >= 70.0 else "En desarrollo formativo"
-
-    # Persistencia del resultado de la postulación
     postulacion = PostulacionDB(
         estudiante_id=estudiante.id,
         oferta_id=oferta.id,
-        scoring=match_result.scoring,
-        skills_coincidentes_json=json.dumps(match_result.matching_skills),
-        skills_faltantes_json=json.dumps(match_result.missing_skills),
-        estado=estado
+        scoring=payload.scoring,
+        skills_coincidentes_json=json.dumps(payload.skills_coincidentes),
+        skills_faltantes_json=json.dumps(payload.skills_faltantes),
+        estado=payload.estado
     )
     db.add(postulacion)
     db.commit()
@@ -75,11 +66,11 @@ def calcular_postulacion_match(payload: MatchRequest, db: Session = Depends(get_
         oferta_id=oferta.id,
         oferta_puesto=oferta.puesto,
         empresa=oferta.empresa,
-        scoring=match_result.scoring,
-        skills_coincidentes=match_result.matching_skills,
-        skills_faltantes=match_result.missing_skills,
-        estado=estado,
-        formula=match_result.formula
+        scoring=payload.scoring,
+        skills_coincidentes=payload.skills_coincidentes,
+        skills_faltantes=payload.skills_faltantes,
+        estado=payload.estado,
+        formula=payload.formula
     )
 
 

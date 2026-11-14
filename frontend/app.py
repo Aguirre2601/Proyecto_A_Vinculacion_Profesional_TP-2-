@@ -8,7 +8,7 @@ import requests
 import streamlit as st
 
 from common import get_gemini_model, init_session_state
-from pages import acerca, estudiantes, historial, main_page, ofertas, postulacion
+from pages import acerca, error, estudiantes, historial, main_page, ofertas, postulacion
 
 # Configuración de página
 st.set_page_config(
@@ -25,14 +25,34 @@ init_session_state()
 # st.sidebar.title("TP: Vinculación Profesional")
 # st.sidebar.caption("Proyecto A - Arquitectura con Separación de Responsabilidades")
 # 
+pagina_inicio = st.Page(
+    main_page.render,
+    title="Inicio",
+    icon="🏠",
+    url_path="inicio",
+    default=True,
+)
+pagina_error = st.Page(
+    error.render,
+    title="Error",
+    icon="⚠️",
+    url_path="error",
+    visibility="hidden",
+)
+
+# Las páginas de error necesitan referencias a los objetos de navegación.
+st.session_state["_main_page_obj"] = pagina_inicio
+st.session_state["_error_page_obj"] = pagina_error
+
 pg = st.navigation(
     [
-        st.Page(main_page.render, title="Inicio", icon="🏠", url_path="inicio", default=True),
+        pagina_inicio,
         st.Page(postulacion.render, title="Postulación y Matching", icon="🎯", url_path="postulacion"),
         st.Page(estudiantes.render, title="Gestión de Estudiantes", icon="👨‍🎓", url_path="estudiantes"),
         st.Page(ofertas.render, title="Catálogo de Ofertas", icon="💼", url_path="ofertas"),
         st.Page(historial.render, title="Historial y Planes IA", icon="📋", url_path="historial"),
         st.Page(acerca.render, title="Acerca del Sistema", icon="ℹ️", url_path="acerca"),
+        pagina_error,
     ]
 )
 
@@ -96,5 +116,12 @@ pg = st.navigation(
 # st.session_state.gemini_key = gemini_key_input
 # st.session_state.gemini_model = gemini_model
 # 
-# Ejecutar la página seleccionada
-pg.run()
+# Ejecutar la página seleccionada y derivar errores no controlados a error.py
+try:
+    pg.run()
+except Exception as ex:
+    st.session_state["error_detalle"] = f"{type(ex).__name__}: {ex}"
+    if pg.url_path != "error":
+        st.switch_page(pagina_error)
+    else:
+        st.error("No se pudo mostrar la página de error.")

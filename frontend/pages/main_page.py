@@ -43,9 +43,9 @@ def render():
     if api_online():
         st.success(f"🟢 Backend conectado en {get_backend_url()}")
     else:
-        st.warning(
-            "🟡 Backend desconectado. La aplicación funciona en modo temporal "
-            "con datos en memoria; los cambios se pierden al recargar."
+        st.error(
+            "🔴 Backend desconectado. Esta versión requiere el backend para funcionar. "
+            "Iniciá FastAPI y recargá la página."
         )
 
-    st.info(f"🤖 Modelo de IA configurado: **{get_gemini_model()}**")
+    st.info(f"🤖 Modelo de IA configurado en n8n: **{get_gemini_model()}**")

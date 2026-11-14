@@ -12,87 +12,66 @@
       "name": "Webhook: Nueva Postulacion",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1.1,
-      "position": [240, 300],
+      "position": [
+        240,
+        300
+      ],
       "webhookId": "tp-postulacion-webhook"
     },
     {
       "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const est = $json.body.estudiante || {};\nconst ofr = $json.body.oferta || {};\nconst norm = (s) => String(s || \"\").trim().toLowerCase();\nconst studentSkills = Array.isArray(est.skills) ? est.skills.map((s) => String(s).trim()).filter(Boolean) : [];\nconst requiredSkills = Array.isArray(ofr.skills_requeridas) ? ofr.skills_requeridas.map((s) => String(s).trim()).filter(Boolean) : [];\nconst studentSet = new Set(studentSkills.map(norm));\nconst matching = requiredSkills.filter((s) => studentSet.has(norm(s)));\nconst missing = requiredSkills.filter((s) => !studentSet.has(norm(s)));\nconst total = requiredSkills.length;\nconst scoring = total === 0 ? 0.0 : Math.round((matching.length / total) * 100 * 100) / 100;\nconst scoringText = Number.isInteger(scoring) ? scoring.toFixed(1) : String(scoring);\nconst formula = total === 0 ? \"(0 / 0) * 100 = 0.0%\" : `(${matching.length} / ${total}) * 100 = ${scoringText}%`;\nconst estado = scoring >= 70.0 ? \"Apta para entrevista\" : \"En desarrollo formativo\";\nreturn [{\n  json: {\n    estudiante_id: est.id,\n    estudiante_nombre: est.nombre || \"\",\n    estudiante_carrera: est.carrera || \"\",\n    oferta_id: ofr.id,\n    oferta_puesto: ofr.puesto || \"\",\n    empresa: ofr.empresa || \"\",\n    scoring,\n    skills_coincidentes: matching,\n    skills_faltantes: missing,\n    formula,\n    estado\n  }\n}];"
+      },
+      "id": "node-calcular-match",
+      "name": "Calcular Match Determinista",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
         "method": "POST",
-        "url": "http://backend:8000/postulaciones/match",
+        "url": "http://backend:8000/postulaciones/registrar",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"estudiante_id\": {{ $json.body.estudiante_id }},\n  \"oferta_id\": {{ $json.body.oferta_id }}\n}",
+        "jsonBody": "={{ JSON.stringify({ estudiante_id: $json.estudiante_id, oferta_id: $json.oferta_id, scoring: $json.scoring, skills_coincidentes: $json.skills_coincidentes, skills_faltantes: $json.skills_faltantes, estado: $json.estado, formula: $json.formula }) }}",
         "options": {
           "timeout": 10000
         }
       },
-      "id": "node-http-match",
-      "name": "HTTP Request: POST /postulaciones/match",
+      "id": "node-registrar-postulacion",
+      "name": "Registrar Postulación en Backend",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [460, 300]
+      "position": [
+        680,
+        300
+      ]
     },
     {
       "parameters": {
         "conditions": {
           "number": [
             {
-              "value1": "={{ $json.scoring }}",
-              "operation": "largerEqual",
-              "value2": 70
+              "value1": "={{ $json.skills_faltantes.length }}",
+              "operation": "larger",
+              "value2": 0
             }
           ]
         }
       },
-      "id": "node-if-scoring",
-      "name": "IF: Scoring >= 70%",
+      "id": "node-if-faltantes",
+      "name": "¿Hay Skills Faltantes?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [680, 300]
-    },
-    {
-      "parameters": {
-        "values": {
-          "string": [
-            {
-              "name": "resultado",
-              "value": "APTA_PARA_ENTREVISTA"
-            },
-            {
-              "name": "mensaje",
-              "value": "El candidato superó el umbral del 70% de compatibilidad técnica."
-            }
-          ]
-        },
-        "options": {}
-      },
-      "id": "node-set-apta",
-      "name": "Set: Apta para Entrevista",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 2,
-      "position": [920, 200]
-    },
-    {
-      "parameters": {
-        "values": {
-          "string": [
-            {
-              "name": "resultado",
-              "value": "EN_DESARROLLO_FORMATIVO"
-            },
-            {
-              "name": "mensaje",
-              "value": "El candidato requiere plan de mejora. Se deriva automáticamente a Workflow 2 (Agente IA)."
-            }
-          ]
-        },
-        "options": {}
-      },
-      "id": "node-set-formativo",
-      "name": "Set: En Desarrollo Formativo",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 2,
-      "position": [920, 420]
+      "position": [
+        900,
+        300
+      ]
     },
     {
       "parameters": {
@@ -100,26 +79,63 @@
         "url": "http://n8n:5678/webhook/ia-enrichment",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"postulacion_id\": {{ $('HTTP Request: POST /postulaciones/match').item.json.postulacion_id }},\n  \"estudiante_id\": {{ $('HTTP Request: POST /postulaciones/match').item.json.estudiante_id }},\n  \"estudiante_nombre\": \"{{ $('HTTP Request: POST /postulaciones/match').item.json.estudiante_nombre }}\",\n  \"oferta_puesto\": \"{{ $('HTTP Request: POST /postulaciones/match').item.json.oferta_puesto }}\",\n  \"empresa\": \"{{ $('HTTP Request: POST /postulaciones/match').item.json.empresa }}\",\n  \"scoring\": {{ $('HTTP Request: POST /postulaciones/match').item.json.scoring }},\n  \"skills_coincidentes\": {{ JSON.stringify($('HTTP Request: POST /postulaciones/match').item.json.skills_coincidentes) }},\n  \"skills_faltantes\": {{ JSON.stringify($('HTTP Request: POST /postulaciones/match').item.json.skills_faltantes) }}\n}",
-        "options": {}
+        "jsonBody": "={{ JSON.stringify({ postulacion_id: $('Registrar Postulación en Backend').item.json.postulacion_id, estudiante_id: $('Registrar Postulación en Backend').item.json.estudiante_id, estudiante_nombre: $('Registrar Postulación en Backend').item.json.estudiante_nombre, oferta_puesto: $('Registrar Postulación en Backend').item.json.oferta_puesto, empresa: $('Registrar Postulación en Backend').item.json.empresa, scoring: $('Registrar Postulación en Backend').item.json.scoring, skills_coincidentes: $('Registrar Postulación en Backend').item.json.skills_coincidentes, skills_faltantes: $('Registrar Postulación en Backend').item.json.skills_faltantes }) }}",
+        "options": {
+          "timeout": 90000
+        }
       },
       "id": "node-trigger-workflow-2",
       "name": "Disparar Workflow 2 (Agente IA)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [1140, 420]
+      "position": [
+        1120,
+        200
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const match = $('Registrar Postulación en Backend').item.json;\nconst ia = $json;\nconst iaError = ia && ia.error ? (ia.error.message || JSON.stringify(ia.error)) : null;\nreturn [{\n  json: {\n    ...match,\n    ia_feedback: iaError ? null : (ia.ia_feedback || null),\n    ia_origen: iaError ? null : (ia.ia_origen || null),\n    ia_error: iaError\n  }\n}];"
+      },
+      "id": "node-preparar-respuesta-ia",
+      "name": "Preparar Respuesta con IA",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const match = $('Registrar Postulación en Backend').item.json;\nreturn [{\n  json: {\n    ...match,\n    ia_feedback: null,\n    ia_origen: null,\n    ia_error: null\n  }\n}];"
+      },
+      "id": "node-preparar-respuesta-sin-ia",
+      "name": "Preparar Respuesta sin IA",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        400
+      ]
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={\n  \"status\": \"ok\",\n  \"postulacion_id\": {{ $('HTTP Request: POST /postulaciones/match').item.json.postulacion_id }},\n  \"scoring\": {{ $('HTTP Request: POST /postulaciones/match').item.json.scoring }},\n  \"estado\": \"{{ $('HTTP Request: POST /postulaciones/match').item.json.estado }}\",\n  \"detalles\": {{ JSON.stringify($json) }}\n}",
+        "responseBody": "={{ JSON.stringify($json) }}",
         "options": {}
       },
       "id": "node-respond-webhook",
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [1360, 300]
+      "position": [
+        1560,
+        300
+      ]
     }
   ],
   "connections": {
@@ -127,43 +143,65 @@
       "main": [
         [
           {
-            "node": "HTTP Request: POST /postulaciones/match",
+            "node": "Calcular Match Determinista",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "HTTP Request: POST /postulaciones/match": {
+    "Calcular Match Determinista": {
       "main": [
         [
           {
-            "node": "IF: Scoring >= 70%",
+            "node": "Registrar Postulación en Backend",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "IF: Scoring >= 70%": {
+    "Registrar Postulación en Backend": {
       "main": [
         [
           {
-            "node": "Set: Apta para Entrevista",
+            "node": "¿Hay Skills Faltantes?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay Skills Faltantes?": {
+      "main": [
+        [
+          {
+            "node": "Disparar Workflow 2 (Agente IA)",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Set: En Desarrollo Formativo",
+            "node": "Preparar Respuesta sin IA",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Set: Apta para Entrevista": {
+    "Disparar Workflow 2 (Agente IA)": {
+      "main": [
+        [
+          {
+            "node": "Preparar Respuesta con IA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Respuesta con IA": {
       "main": [
         [
           {
@@ -174,18 +212,7 @@
         ]
       ]
     },
-    "Set: En Desarrollo Formativo": {
-      "main": [
-        [
-          {
-            "node": "Disparar Workflow 2 (Agente IA)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Disparar Workflow 2 (Agente IA)": {
+    "Preparar Respuesta sin IA": {
       "main": [
         [
           {

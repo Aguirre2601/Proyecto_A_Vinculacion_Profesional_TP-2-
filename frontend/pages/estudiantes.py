@@ -4,7 +4,7 @@ pages/estudiantes.py - Vista de gestión de estudiantes.
 import requests
 import streamlit as st
 
-from common import api_online, get_backend_url, obtener_estudiantes
+from common import api_online, get_backend_url, ir_a_error, obtener_estudiantes
 
 
 def render():
@@ -63,17 +63,20 @@ def render():
                         else:
                             st.error(f"❌ Error en Backend ({resp.status_code}): {resp.text}")
                     except Exception as ex:
-                        st.error(f"❌ Error de conexión con el Backend: {ex}")
+                        ir_a_error(ex, "No se pudo guardar el estudiante")
+                # Fallback en memoria deshabilitado: sin backend no se guarda.
+                # else:
+                #     nuevo_local = {
+                #         "id": len(st.session_state.estudiantes) + 1,
+                #         "nombre": f_nombre.strip(),
+                #         "email": email_limpio,
+                #         "carrera": f_carrera,
+                #         "skills": skills_list
+                #     }
+                #     st.session_state.estudiantes.append(nuevo_local)
+                #     st.warning("Estudiante guardado SOLO TEMPORALMENTE en memoria RAM.")
                 else:
-                    nuevo_local = {
-                        "id": len(st.session_state.estudiantes) + 1,
-                        "nombre": f_nombre.strip(),
-                        "email": email_limpio,
-                        "carrera": f_carrera,
-                        "skills": skills_list
-                    }
-                    st.session_state.estudiantes.append(nuevo_local)
-                    st.warning(f"⚠️ Estudiante '{f_nombre}' guardado SOLO TEMPORALMENTE en la memoria RAM del navegador. Como el Backend FastAPI no está conectado, este dato se perderá si recargas la página o reinicias. Levanta el Backend para persistir permanentemente.")
+                    ir_a_error("Backend desconectado", "No se puede guardar el estudiante")
 
     st.divider()
     st.subheader("Estudiantes Registrados")

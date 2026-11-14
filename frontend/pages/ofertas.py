@@ -4,7 +4,7 @@ pages/ofertas.py - Vista del catálogo de ofertas laborales.
 import requests
 import streamlit as st
 
-from common import api_online, get_backend_url, obtener_ofertas
+from common import api_online, get_backend_url, ir_a_error, obtener_ofertas
 
 
 def render():
@@ -47,17 +47,20 @@ def render():
                             else:
                                 st.error(f"❌ Error al publicar ({resp_ofr.status_code}): {resp_ofr.text}")
                         except Exception as ex:
-                            st.error(f"❌ Error de conexión al guardar oferta: {ex}")
+                            ir_a_error(ex, "No se pudo publicar la oferta")
+                    # Fallback en memoria deshabilitado: sin backend no se guarda.
+                    # else:
+                    #     nueva_ofr_local = {
+                    #         "id": len(st.session_state.ofertas) + 1,
+                    #         "puesto": o_puesto.strip(),
+                    #         "empresa": o_empresa.strip(),
+                    #         "skills_requeridas": skills_req,
+                    #         "descripcion": o_desc.strip() if o_desc else ""
+                    #     }
+                    #     st.session_state.ofertas.append(nueva_ofr_local)
+                    #     st.warning("Oferta guardada SOLO TEMPORALMENTE en RAM.")
                     else:
-                        nueva_ofr_local = {
-                            "id": len(st.session_state.ofertas) + 1,
-                            "puesto": o_puesto.strip(),
-                            "empresa": o_empresa.strip(),
-                            "skills_requeridas": skills_req,
-                            "descripcion": o_desc.strip() if o_desc else ""
-                        }
-                        st.session_state.ofertas.append(nueva_ofr_local)
-                        st.warning("⚠️ Oferta guardada SOLO TEMPORALMENTE en RAM de la pestaña. Conecta el Backend para persistir permanentemente en SQLite.")
+                        ir_a_error("Backend desconectado", "No se puede publicar la oferta")
 
     st.divider()
     st.subheader("Catálogo de Búsquedas Activas")

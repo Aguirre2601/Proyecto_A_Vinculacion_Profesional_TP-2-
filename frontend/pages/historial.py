@@ -4,7 +4,7 @@ pages/historial.py - Vista del historial de postulaciones y planes IA.
 import requests
 import streamlit as st
 
-from common import api_online, get_backend_url
+from common import api_online, get_backend_url, ir_a_error
 
 
 def render():
@@ -19,12 +19,20 @@ def render():
     if online:
         try:
             r = requests.get(f"{backend_url}/postulaciones", timeout=3)
-            if r.status_code == 200:
-                postulaciones_db = r.json()
-        except Exception:
-            pass
+        except Exception as ex:
+            ir_a_error(ex, "No se pudo cargar el historial")
+            raise
 
-    postulaciones = postulaciones_db if postulaciones_db else st.session_state.postulaciones
+        if r.status_code == 200:
+            postulaciones_db = r.json()
+        else:
+            ir_a_error(f"HTTP {r.status_code}", "No se pudo cargar el historial")
+    else:
+        ir_a_error("Backend desconectado", "No se puede cargar el historial")
+
+    # Fallback en memoria deshabilitado.
+    # postulaciones = postulaciones_db if postulaciones_db else st.session_state.postulaciones
+    postulaciones = postulaciones_db
     if postulaciones:
         for p in reversed(postulaciones):
             titulo_post = f"Postulacion #{p['id']} - Scoring: {p['scoring']:.1f}% ({p['estado']}) - Estudiante ID #{p['estudiante_id']}"

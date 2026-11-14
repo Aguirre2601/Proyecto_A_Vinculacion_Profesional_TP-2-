@@ -1,6 +1,6 @@
 """
 schemas.py - Modelos Pydantic para validación estricta de esquemas
-Define qué entra y sale por la API (EstudianteCreate, EstudianteResponse, MatchRequest), con validaciones, tipos y documentación automática en /docs.
+Define qué entra y sale por la API (EstudianteCreate, EstudianteResponse), con validaciones, tipos y documentación automática en /docs.
 """
 from typing import List, Optional
 from datetime import datetime
@@ -80,10 +80,6 @@ class OfertaResponse(BaseModel):
 # ==========================================
 # Modelos para Postulación y Matching Determinista
 # ==========================================
-class MatchRequest(BaseModel):
-    estudiante_id: int = Field(..., gt=0, description="ID del estudiante postulado")
-    oferta_id: int = Field(..., gt=0, description="ID de la oferta laboral")
-
 
 class MatchResponse(BaseModel):
     postulacion_id: int
@@ -97,6 +93,17 @@ class MatchResponse(BaseModel):
     skills_faltantes: List[str]
     estado: str = Field(..., description="'Apta para entrevista' o 'En desarrollo formativo'")
     formula: str
+
+
+class MatchRegistroRequest(BaseModel):
+    """Match ya calculado por n8n; el backend solo lo persiste."""
+    estudiante_id: int = Field(..., gt=0, description="ID del estudiante postulado")
+    oferta_id: int = Field(..., gt=0, description="ID de la oferta laboral")
+    scoring: float = Field(..., ge=0.0, le=100.0, description="Scoring calculado por n8n")
+    skills_coincidentes: List[str]
+    skills_faltantes: List[str]
+    estado: str = Field(..., min_length=3, max_length=50)
+    formula: str = Field(..., min_length=3, max_length=200)
 
 
 # ==========================================

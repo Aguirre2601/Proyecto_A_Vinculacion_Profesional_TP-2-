@@ -7,7 +7,7 @@
 - **Objetivo:** calcular la compatibilidad técnica de forma determinista, detectar brechas de habilidades, generar un plan formativo con IA y automatizar el flujo con n8n.
 - **Stack:** Streamlit (frontend) + FastAPI/SQLAlchemy/SQLite (backend) + n8n (automatización) + Google Gemini 3.8 Flash (IA opcional).
 - **Principio central:** el scoring **nunca** lo calcula un LLM. La IA solo redacta el plan de mejora a partir de las habilidades faltantes.
-- **Estado:** funcional con Docker Compose (3 servicios). El frontend tiene modo autónomo en memoria si el backend no responde.
+- **Estado:** funcional con Docker Compose (3 servicios). El frontend requiere el backend; si falla, muestra la página global de error.
 
 ## Comandos
 
@@ -30,7 +30,7 @@ docker compose config --quiet    # validar compose.yaml
 
 # Verificación rápida
 curl http://localhost:8000/health
-python -m py_compile backend/app/main.py backend/app/basededatos.py backend/app/models.py backend/app/schemas.py backend/app/api/estudiantes.py backend/app/api/ofertas.py backend/app/api/postulaciones.py backend/app/api/health.py backend/app/services/matcher.py frontend/app.py
+python -m py_compile backend/app/main.py backend/app/database/database.py backend/app/database/models.py backend/app/schemas.py backend/app/api/estudiantes.py backend/app/api/ofertas.py backend/app/api/postulaciones.py backend/app/api/health.py frontend/app.py frontend/common.py frontend/pages/main_page.py frontend/pages/postulacion.py frontend/pages/estudiantes.py frontend/pages/ofertas.py frontend/pages/historial.py frontend/pages/acerca.py frontend/pages/error.py
 python -c "import json,glob; [json.load(open(f,encoding='utf-8')) for f in glob.glob('n8n/*.json')]"
 ```
 
@@ -40,8 +40,8 @@ python -c "import json,glob; [json.load(open(f,encoding='utf-8')) for f in glob.
 
 | Servicio | Tecnología | Puerto | Responsabilidad |
 |---|---|---|---|
-| `frontend` | Streamlit | 8501 | Interfaz de usuario, fallback offline, cliente HTTP del backend. |
-| `backend` | FastAPI + SQLAlchemy | 8000 | API REST, validación, scoring determinista, persistencia SQLite. |
+| `frontend` | Streamlit | 8501 | Interfaz de usuario, cliente HTTP del backend y página global de error. |
+| `backend` | FastAPI + SQLAlchemy | 8000 | API REST, validación y persistencia SQLite; el scoring lo calcula n8n. |
 | `n8n` | n8n | 5678 | Orquestación Low-Code mediante webhooks. |
 
 - **Red Docker:** `app-network` (los servicios se resuelven por nombre: `http://backend:8000`, `http://n8n:5678`).
@@ -53,15 +53,19 @@ python -c "import json,glob; [json.load(open(f,encoding='utf-8')) for f in glob.
 ### Flujo de datos
 
 ```text
-Streamlit ──► POST /estudiantes | /ofertas | /postulaciones/match ──► FastAPI
-                                                                      │
-                                                        matcher.py (puro)
-                                                                      │
-                                                                   SQLite
-                                                                      │
-                                     (scoring < 70%) ──► plan IA ──► POST /postulaciones/{id}/ia-feedback
+Streamlit ──► POST /estudiantes | /ofertas ──► FastAPI ──► SQLite
+Streamlit ──► POST /webhook/postulacion (Workflow 1) ──► Code node: match determinista
+                                                              │
+                                                  POST /postulaciones/registrar ──► SQLite
+                                                              │
+                                          (skills faltantes) ──► Workflow 2 (Gemini)
+                                                              │        │
+                                                              │        └── POST /postulaciones/{id}/ia-feedback
+                                                              │        └── Workflow 3 (notificación simulada)
+                                                              │
+                                              match + ia_feedback ──► Streamlit
 
-n8n: workflow 1 (pre-scoring) ──► workflow 2 (IA) ──► workflow 3 (notificación simulada)
+El backend solo persiste el match que calcula n8n; no recalcula el scoring.
 ```
 
 ## Estructura
@@ -85,10 +89,8 @@ n8n: workflow 1 (pre-scoring) ──► workflow 2 (IA) ──► workflow 3 (no
 │   │   ├── api/
 │   │   │   ├── estudiantes.py   # Endpoints de estudiantes
 │   │   │   ├── ofertas.py       # Endpoints de ofertas
-│   │   │   ├── postulaciones.py # Matching, historial e ia-feedback
+│   │   │   ├── postulaciones.py # Persistencia, historial e ia-feedback
 │   │   │   └── health.py        # /health
-│   │   └── services/
-│   │       └── matcher.py       # Algoritmo determinista puro
 │   ├── data/                    # SQLite persistente (no versionar .db)
 │   └── Dockerfile / requirements.txt / .dockerignore
 ├── frontend/
@@ -100,7 +102,8 @@ n8n: workflow 1 (pre-scoring) ──► workflow 2 (IA) ──► workflow 3 (no
 │   │   ├── estudiantes.py       # Vista 2: gestión de estudiantes
 │   │   ├── ofertas.py           # Vista 3: catálogo de ofertas
 │   │   ├── historial.py         # Vista 4: historial y planes IA
-│   │   └── acerca.py            # Vista 5: arquitectura del sistema
+│   │   ├── acerca.py            # Vista 5: arquitectura del sistema
+│   │   └── error.py             # Página global de error y retorno al inicio
 │   ├── Dockerfile / requirements.txt / .dockerignore
 └── n8n/
     ├── readme.md                    # Documentación de los workflows
@@ -119,27 +122,28 @@ n8n: workflow 1 (pre-scoring) ──► workflow 2 (IA) ──► workflow 3 (no
 - **Email duplicado:** `HTTP 400`. Datos inválidos: `HTTP 422`. Recurso inexistente: `HTTP 404`.
 - **Persistencia:** tablas `estudiantes`, `ofertas`, `postulaciones`; las listas de skills se guardan como JSON en columnas `Text`.
 - **Trazabilidad:** cada match crea una fila en `postulaciones` con scoring, skills coincidentes/faltantes y estado.
+- **Match en n8n:** el frontend llama a `POST /webhook/postulacion`; el Code node del Workflow 1 calcula el match con la fórmula y el umbral, y el resultado se persiste con `POST /postulaciones/registrar`. El backend no recalcula el scoring.
 
 ## Integración con IA
 
-- **Proveedor:** Google Gemini 3.8 Flash, clave opcional en `GEMINI_API_KEY` (`.env`) y modelo configurable con `GEMINI_MODEL` (default `gemini-3.8-flash`).
-- **Sin clave o sin red:** el frontend usa una plantilla pedagógica offline; la app debe seguir funcionando.
+- **Proveedor:** Google Gemini, configurado en n8n con la credencial **Header Auth account** (`httpHeaderAuth`, header `x-goog-api-key`) y el modelo fijo `gemini-3.1-flash-lite` en el nodo HTTP Request del Workflow 2. No se usan variables `GEMINI_*` en `.env` ni en `compose.yaml`.
+- **Sin credencial o sin red:** el Workflow 1 devuelve el match con `ia_feedback: null` e `ia_error`; la app sigue funcionando y el frontend muestra un aviso.
 - **El LLM nunca calcula el scoring ni inventa habilidades.** Solo redacta el plan.
-- **Prompt en vivo:** está embebido en `frontend/pages/postulacion.py`; su especificación está resumida en este archivo.
+- **Prompt en vivo:** está embebido en el nodo `Armar Prompt con Skills Faltantes` de `n8n/workflow_2_enriquecimiento_ia.json`; su especificación está resumida en este archivo.
 - **Especificación del prompt (resumen):**
   - Rol: Asesor Técnico de Empleabilidad y Mentor Senior en Ingeniería de Software.
   - Variables: estudiante, carrera, puesto, empresa, scoring, skills coincidentes y **skills faltantes**.
   - Regla: basar las recomendaciones **exclusivamente** en las skills faltantes.
   - Salida obligatoria en Markdown con: `### Diagnóstico de Brecha Formativa`, `### Ruta de Aprendizaje Acelerada (Estimación en Semanas)`, `### Mini Proyecto Integrador de Portfolio`, `### Recursos y Cursos Gratuitos Recomendados`.
-- **n8n:** el workflow 2 lee `$env.GEMINI_API_KEY`; requiere `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` en `compose.yaml`.
-- **Seguridad:** nunca versionar ni imprimir la clave. `.env` está en `.gitignore`.
+- **n8n:** el Workflow 2 usa la credencial `Header Auth account` y la URL fija `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent`; no requiere `N8N_BLOCK_ENV_ACCESS_IN_NODE`.
+- **Seguridad:** la clave vive cifrada en la credencial de n8n; nunca versionarla ni imprimirla. `.env` está en `.gitignore`.
 
 ## Automatización n8n
 
 | Workflow | Webhook | Acción |
 |---|---|---|
-| 1 | `POST /webhook/postulacion` | Llama a `/postulaciones/match` y bifurca por scoring. |
-| 2 | `POST /webhook/ia-enrichment` | Arma el prompt, llama a Gemini y guarda el feedback. |
+| 1 | `POST /webhook/postulacion` | Calcula el match en un Code node, persiste vía `/postulaciones/registrar` y llama al Workflow 2 si hay skills faltantes. |
+| 2 | `POST /webhook/ia-enrichment` | Arma el prompt, llama a Gemini, guarda el feedback y lo devuelve al Workflow 1. |
 | 3 | `POST /webhook/notificacion-reporte` | Simula el correo si hay feedback. |
 
 - Los workflows se **importan manualmente** (Workflows → Import from File) y deben quedar **Active**.
@@ -155,9 +159,10 @@ n8n: workflow 1 (pre-scoring) ──► workflow 2 (IA) ──► workflow 3 (no
 - Python con `snake_case`, type hints y docstrings en español.
 - Pydantic v2: usar `min_length`/`max_length` (no `min_items`), `field_validator` y `from_attributes`.
 - Endpoints REST en español y sustantivos en plural (`/estudiantes`, `/ofertas`, `/postulaciones`).
-- La lógica determinista vive en `backend/app/services/matcher.py` y debe permanecer pura (sin DB ni HTTP).
-- Mantener el modo offline del frontend; no romper la demo sin backend.
+- La fórmula y el umbral están implementados únicamente en el Code node `Calcular Match Determinista` del Workflow 1; el backend no recalcula el scoring.
+- El frontend no usa fallback offline para datos ni scoring: si el backend o n8n fallan, muestra `frontend/pages/error.py`.
 - Cada vista del frontend vive en `frontend/pages/` y expone `render()`; `app.py` configura, dibuja la sidebar y define la navegación con `st.navigation`/`st.Page` (cada página con `url_path` único).
+- Los errores no controlados y los fallos de guardado se derivan a `frontend/pages/error.py`. Si falla solo la IA, el match se conserva y el frontend muestra `ia_error`.
 - No incluir secretos, tokens ni datos personales en el repositorio ni en `MEMORY.md`.
 
 ## Forma de trabajar

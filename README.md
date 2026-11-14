@@ -11,7 +11,7 @@ Sistema de matching determinista entre estudiantes universitarios y ofertas labo
 
 La plataforma permite que estudiantes universitarios se postulen a ofertas laborales y obtengan un **porcentaje de compatibilidad técnica calculado de forma determinista**, junto con un listado exacto de las habilidades que dominan y las que les faltan.
 
-A partir de esa brecha, el sistema puede generar un **plan de formación personalizado** (con Google Gemini o con un generador pedagógico offline) y almacenarlo en la base de datos. Adicionalmente, un conjunto de workflows de **n8n** automatiza el flujo completo: recepción de la postulación, pre-scoring, enriquecimiento con IA y notificación final.
+A partir de esa brecha, el sistema puede generar un **plan de formación personalizado** con Google Gemini desde el Workflow 2 de n8n y almacenarlo en la base de datos. Adicionalmente, un conjunto de workflows de **n8n** automatiza el flujo completo: recepción de la postulación, cálculo del match, enriquecimiento con IA y notificación final.
 
 El principio central es la **separación de responsabilidades**:
 
@@ -37,7 +37,7 @@ Diseñar e implementar una arquitectura desacoplada que:
    - **En desarrollo formativo** si `Scoring < 70%`.
 4. Genere y persista una recomendación formativa para cerrar la brecha de habilidades.
 5. Automatice el flujo mediante webhooks y workflows Low-Code.
-6. Ofrecer una interfaz web amigable y tolerante a fallos (modo autónomo si el backend no está disponible).
+6. Ofrecer una interfaz web amigable que muestre una página de error clara si el backend no está disponible.
 
 ---
 
@@ -46,10 +46,10 @@ Diseñar e implementar una arquitectura desacoplada que:
 | Componente | Tecnología | Puerto por defecto | Función |
 |---|---|---|---|
 | **Frontend** | Streamlit (Python) | `8501` | Interfaz de usuario: postulaciones, alta de estudiantes/ofertas, historial y planes IA. |
-| **Backend** | FastAPI + SQLAlchemy (Python) | `8000` | API REST, validación de datos, cálculo determinista, persistencia SQLite. |
+| **Backend** | FastAPI + SQLAlchemy (Python) | `8000` | API REST, validación de datos y persistencia SQLite; el scoring lo calcula n8n. |
 | **Base de datos** | SQLite | — | Persistencia en `backend/data/vinculacion.db` (volumen del host). |
-| **Automatización** | n8n | `5678` | Orquestación Low-Code mediante 3 workflows encadenados. |
-| **Motor de IA** | Google Gemini (opcional, configurable con `GEMINI_MODEL`) | — | Generación del plan formativo con `gemini-3.8-flash` por defecto. Si no hay clave, se usa una plantilla offline. |
+| **Automatización** | n8n | `5678` | Orquestación Low-Code: el Workflow 1 calcula el match y el Workflow 2 genera el plan IA. |
+| **Motor de IA** | Google Gemini (credencial Header Auth en n8n) | — | Generación del plan formativo con el modelo fijo `gemini-3.1-flash-lite`. Si la credencial falta o falla la red, el plan no se genera y se informa el error. |
 
 ### Flujo funcional
 
@@ -58,25 +58,28 @@ Usuario (Streamlit)
         │
         ├── POST /estudiantes ──────────────► SQLite
         ├── POST /ofertas ──────────────────► SQLite
-        └── POST /postulaciones/match ──────► Matcher determinista ──► SQLite
-                    │
-                    └── (Scoring < 70%) ──► Plan IA (Gemini / offline)
-                                              │
-                                              └── POST /postulaciones/{id}/ia-feedback
-
-n8n (opcional, demostración de automatización)
-Workflow 1 (Webhook) ──► Backend /postulaciones/match
-        ├── Scoring >= 70% ──► respuesta APTA_PARA_ENTREVISTA
-        └── Scoring < 70%  ──► Workflow 2 (Gemini) ──► Backend ia-feedback
-                                                        └──► Workflow 3 (notificación simulada)
+        └── POST /webhook/postulacion ──────► n8n Workflow 1
+                                                │
+                                    Code node: match determinista
+                                                │
+                                    POST /postulaciones/registrar ──► SQLite
+                                                │
+                                    (skills faltantes) ──► Workflow 2 (Gemini)
+                                                │              │
+                                                │              └── POST /postulaciones/{id}/ia-feedback
+                                                │              └── Workflow 3 (notificación simulada)
+                                                │
+                                    Respuesta: match + ia_feedback ──► Streamlit
 ```
+
+El cálculo determinista se ejecuta en el Code node del Workflow 1 de n8n. El backend solo persiste el resultado que n8n envía a `/postulaciones/registrar`; no recalcula el scoring.
 
 ### Workflows de n8n incluidos
 
 | Archivo | Webhook | Función |
 |---|---|---|
-| `n8n/workflow_1_prescoring.json` | `POST /webhook/postulacion` | Recibe la postulación, llama al backend y bifurca según el scoring (>= 70%). |
-| `n8n/workflow_2_enriquecimiento_ia.json` | `POST /webhook/ia-enrichment` | Construye el prompt con las skills faltantes, llama a Gemini y guarda el feedback. |
+| `n8n/workflow_1_prescoring.json` | `POST /webhook/postulacion` | Recibe el estudiante y la oferta completos, calcula el match en un Code node, persiste vía `/postulaciones/registrar` y llama al Workflow 2 si hay skills faltantes. |
+| `n8n/workflow_2_enriquecimiento_ia.json` | `POST /webhook/ia-enrichment` | Construye el prompt con las skills faltantes, llama a Gemini, guarda el feedback y lo devuelve al Workflow 1. |
 | `n8n/workflow_3_notificacion_reporte.json` | `POST /webhook/notificacion-reporte` | Simula el envío del informe al estudiante si existe feedback de IA. |
 
 ---
@@ -96,7 +99,7 @@ Workflow 1 (Webhook) ──► Backend /postulaciones/match
 
 - **Clave de API de Google Gemini** para generar planes con IA en vivo.
   Se obtiene gratis en <https://aistudio.google.com/>.
-  Sin clave, el sistema funciona igual usando el generador pedagógico offline.
+  Sin clave, el match se calcula igual y el plan IA se informa como no disponible.
 - **Python 3.11+** solo si se desea ejecutar los servicios sin Docker.
 
 > Con Docker **no es necesario instalar Python ni las dependencias** de `requirements.txt` en la máquina anfitriona.
@@ -126,14 +129,13 @@ Copy-Item .env.example .env
 cp .env.example .env
 ```
 
-Editar `.env` y, si se desea usar IA en vivo, completar:
+No hace falta configurar Gemini en `.env`. La clave se carga en n8n:
 
-```env
-GEMINI_API_KEY=TU_CLAVE_DE_GEMINI
-GEMINI_MODEL=gemini-3.8-flash
-```
+1. Ir a **Credentials → Create New → Header Auth**.
+2. Nombre: `Header Auth account`; **Header Name:** `x-goog-api-key`; **Value:** tu clave de Google Gemini.
+3. El Workflow 2 usa esa credencial y el modelo fijo `gemini-3.1-flash-lite`.
 
-> Si `GEMINI_API_KEY` se deja vacía, el sistema usará automáticamente el plan formativo offline. `GEMINI_MODEL` es opcional y su valor por defecto es `gemini-3.8-flash`.
+> Si la credencial falta o es inválida, el plan IA no se genera y el match se muestra igual con un aviso. El modelo está fijado en el nodo HTTP Request del Workflow 2; para cambiarlo hay que editar ese nodo.
 
 ### 6.3 Construir las imágenes
 
@@ -236,11 +238,9 @@ Los workflows **no se importan automáticamente**. Pasos:
 4. Activar los tres workflows con el interruptor **Inactive → Active**.
    - El workflow 3 debe estar activo para que el workflow 2 pueda invocarlo.
    - El workflow 2 debe estar activo para que el workflow 1 pueda invocarlo.
-5. Para la demostración desde el frontend:
-   - **Modo Test:** en n8n, hacer clic en **Test workflow** y luego usar el botón “Disparar n8n (Modo Test)” del frontend (usa `/webhook-test/postulacion`).
-   - **Modo Producción:** con el workflow activo, usar “Disparar n8n (Modo Producción Activo)” (usa `/webhook/postulacion`).
+5. Para la demostración desde el frontend: en la vista **Postulación**, seleccionar estudiante y oferta y pulsar **🚀 Calcular Compatibilidad Determinista**. La app llama a `/webhook/postulacion` (Workflow 1 en producción) y muestra el match y el plan IA.
 
-> La variable `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` ya está configurada en `compose.yaml` para que el workflow 2 pueda leer `$env.GEMINI_API_KEY`.
+> El Workflow 2 usa la credencial `Header Auth account` (`x-goog-api-key`) y la URL fija de Gemini; no necesita variables de entorno ni `N8N_BLOCK_ENV_ACCESS_IN_NODE`.
 
 ---
 
@@ -257,7 +257,7 @@ Los workflows **no se importan automáticamente**. Pasos:
 
 ### 9.3 Postulación y matching determinista
 - Selección de estudiante y oferta.
-- Cálculo matemático reproducible del scoring.
+- Cálculo matemático reproducible del scoring en el Code node del Workflow 1 de n8n.
 - Visualización de:
   - Puntaje de compatibilidad.
   - Estado de la postulación (Apta / En desarrollo).
@@ -271,21 +271,22 @@ Los workflows **no se importan automáticamente**. Pasos:
   - Ruta de aprendizaje acelerada.
   - Proyecto integrador de portfolio.
   - Recursos gratuitos recomendados.
-- Uso de Gemini (`GEMINI_MODEL`, por defecto `gemini-3.8-flash`) si hay clave.
-- Fallback offline con plantilla pedagógica si no hay clave o falla la red.
+- Uso de Gemini (`gemini-3.1-flash-lite`) desde el Workflow 2 de n8n con la credencial `Header Auth account`.
+- Si la credencial falta o falla la red, el match se muestra igual y el plan se informa como no disponible.
 - Persistencia del plan en SQLite mediante `POST /postulaciones/{id}/ia-feedback`.
 
 ### 9.5 Historial de postulaciones
 - Consulta de postulaciones con scoring, estado y plan IA almacenado.
 
 ### 9.6 Automatización con n8n
-- Pre-scoring automático vía webhook.
-- Bifurcación condicional por umbral del 70%.
+- El frontend dispara el Workflow 1 con los datos completos del estudiante y la oferta.
+- El Workflow 1 calcula el match, lo persiste y, si hay skills faltantes, llama al Workflow 2.
 - Enriquecimiento con IA y notificación simulada.
 
-### 9.7 Modo autónomo (alta disponibilidad)
-- Si el backend no responde, el frontend sigue funcionando con datos semilla en memoria (`st.session_state`).
-- Permite demostrar la interfaz sin base de datos, aunque los datos se pierden al recargar.
+### 9.7 Manejo de errores sin fallback offline
+- Si el backend o n8n no responden, el frontend muestra `frontend/pages/error.py` y permite volver al inicio.
+- No se usan datos semilla ni se calcula el scoring localmente en el frontend.
+- El plan IA puede faltar sin perder el match: el Workflow 1 devuelve `ia_error` y el frontend lo muestra como aviso.
 
 ### 9.8 Documentación interactiva de la API
 - Swagger UI en `/docs` y ReDoc en `/redoc`.
@@ -300,17 +301,25 @@ Los workflows **no se importan automáticamente**. Pasos:
 | `GET` | `/estudiantes` | `200` | Listar estudiantes. |
 | `POST` | `/ofertas` | `201` / `422` | Registrar oferta laboral. |
 | `GET` | `/ofertas?puesto=&empresa=` | `200` | Listar/filtrar ofertas. |
-| `POST` | `/postulaciones/match` | `200` / `404` | Calcular scoring y persistir postulación. |
+| `POST` | `/postulaciones/registrar` | `201` / `404` / `422` | Persistir un match ya calculado por n8n Workflow 1. |
 | `GET` | `/postulaciones` | `200` | Historial de postulaciones. |
 | `POST` | `/postulaciones/{id}/ia-feedback` | `200` / `404` | Guardar plan formativo del LLM. |
 | `GET` | `/health` | `200` | Healthcheck del servicio. |
 
-### Ejemplo de cálculo de match
+### Ejemplo de persistencia de un match calculado por n8n
 
 ```bash
-curl -X POST http://localhost:8000/postulaciones/match \
+curl -X POST http://localhost:8000/postulaciones/registrar \
   -H "Content-Type: application/json" \
-  -d '{"estudiante_id": 1, "oferta_id": 1}'
+  -d '{
+    "estudiante_id": 1,
+    "oferta_id": 1,
+    "scoring": 60.0,
+    "skills_coincidentes": ["Python", "FastAPI", "Git"],
+    "skills_faltantes": ["Docker", "PostgreSQL"],
+    "estado": "En desarrollo formativo",
+    "formula": "(3 / 5) * 100 = 60.0%"
+  }'
 ```
 
 ### Ejemplo de alta de estudiante
@@ -352,10 +361,8 @@ Proyecto_A_Vinculacion_Profesional_TP/
 │   │   ├── api/
 │   │   │   ├── estudiantes.py    # Endpoints de estudiantes
 │   │   │   ├── ofertas.py        # Endpoints de ofertas
-│   │   │   ├── postulaciones.py  # Matching, historial e ia-feedback
+│   │   │   ├── postulaciones.py  # Persistencia, historial e ia-feedback
 │   │   │   └── health.py         # /health
-│   │   └── services/
-│   │       └── matcher.py        # Algoritmo determinista puro
 │   └── data/                     # Persistencia SQLite montada desde el host
 │       └── .gitkeep              # Conserva la carpeta en el repositorio
 │
@@ -371,7 +378,8 @@ Proyecto_A_Vinculacion_Profesional_TP/
 │       ├── estudiantes.py        # Vista de gestión de estudiantes
 │       ├── ofertas.py            # Vista del catálogo de ofertas
 │       ├── historial.py          # Vista del historial de postulaciones
-│       └── acerca.py             # Vista de arquitectura del sistema
+│       ├── acerca.py             # Vista de arquitectura del sistema
+│       └── error.py              # Página global de error y retorno al inicio
 │
 └── n8n/                          # Workflows exportados de n8n (importar manualmente)
     ├── readme.md                 # Documentación de los workflows
@@ -389,11 +397,10 @@ Proyecto_A_Vinculacion_Profesional_TP/
 | `backend/app/database/database.py` | Crea las tablas `estudiantes`, `ofertas` y `postulaciones`, y precarga datos semilla. |
 | `backend/app/database/models.py` | Modelos ORM de SQLAlchemy y serialización JSON de skills. |
 | `backend/app/schemas.py` | Validación de emails, longitudes y listas de habilidades con Pydantic v2. |
-| `backend/app/services/matcher.py` | Función pura de scoring y detección de brechas; no depende de FastAPI ni de la base de datos. |
 | `frontend/app.py` | Punto de entrada: configuración global, sidebar y navegación con `st.navigation`. |
-| `frontend/pages/` | Una vista por archivo (`main_page`, `postulacion`, `estudiantes`, `ofertas`, `historial`, `acerca`), cada una con `render()`. |
-| `frontend/common.py` | Datos semilla, estado de sesión y helpers de API compartidos. |
-| `.env.example` | Puertos, URLs, clave opcional de Gemini y modelo (`GEMINI_MODEL`). |
+| `frontend/pages/` | Una vista por archivo (`main_page`, `postulacion`, `estudiantes`, `ofertas`, `historial`, `acerca`, `error`), cada una con `render()`. |
+| `frontend/common.py` | Estado de sesión y helpers de API compartidos. |
+| `.env.example` | Puertos y URLs. La clave de Gemini se configura en la credencial de n8n, no en `.env`. |
 
 ---
 
@@ -407,8 +414,8 @@ Proyecto_A_Vinculacion_Profesional_TP/
 | `N8N_HOST` | `localhost` | Host público de n8n. |
 | `DATABASE_URL` | `sqlite:///./data/vinculacion.db` | Cadena de conexión de SQLAlchemy. |
 | `BACKEND_API_URL` | `http://backend:8000` | URL interna del backend usada por el frontend. |
-| `GEMINI_API_KEY` | *(vacío)* | Clave opcional de Google Gemini. |
-| `GEMINI_MODEL` | `gemini-3.8-flash` | Modelo de Gemini usado por el frontend y n8n. |
+
+> La clave y el modelo de Gemini no son variables de entorno: se configuran en la credencial `Header Auth account` y en el nodo HTTP Request del Workflow 2 de n8n.
 
 ---
 
@@ -416,11 +423,11 @@ Proyecto_A_Vinculacion_Profesional_TP/
 
 | Síntoma | Causa probable | Solución |
 |---|---|---|
-| El frontend muestra “Backend Desconectado”. | El backend aún no terminó de arrancar o falló. | `docker compose ps` y `docker compose logs backend`. Esperar el healthcheck. |
+| El frontend muestra la página de error o “Backend desconectado”. | El backend aún no terminó de arrancar o falló. | `docker compose ps` y `docker compose logs backend`. Esperar el healthcheck. |
 | `port is already allocated`. | Otro proceso usa 8000/8501/5678. | Cambiar los puertos en `.env` o liberar el puerto. |
-| n8n no ejecuta el workflow 2. | Falta `GEMINI_API_KEY` o el workflow 2 no está activo. | Configurar la clave en `.env`, reiniciar con `docker compose up -d` y activar el workflow. |
+| n8n no ejecuta el workflow 2. | Falta la credencial `Header Auth account` o el workflow 2 no está activo. | Crear/verificar la credencial en n8n (header `x-goog-api-key`) y activar el workflow. |
 | Error 404 al disparar el webhook de producción. | El workflow está inactivo. | Activar el workflow en n8n (Inactive → Active). |
-| Los datos desaparecen al recargar. | El backend está caído y se usa memoria RAM. | Levantar el backend y verificar `/health`. |
+| Los datos no se guardan y aparece la página de error. | El backend está caído; no hay fallback en memoria. | Levantar el backend y verificar `/health`. |
 | El plan IA se genera pero no se guarda. | La postulación no existe en SQLite o el backend está caído. | Verificar que el match se haya calculado con el backend online. |
 | Los cambios de código no se reflejan. | Imagen antigua en caché. | `docker compose build --no-cache && docker compose up -d`. |
 | Windows no encuentra `curl`. | PowerShell antiguo. | Usar `curl.exe` o `Invoke-RestMethod`. |
@@ -441,8 +448,8 @@ docker compose config
 
 - El scoring es **determinista** y no usa IA; el LLM solo redacta el plan formativo.
 - El envío de correo del workflow 3 es **simulado** (nodo Set); no se envía un email real.
-- El workflow 2 requiere conexión a Internet y una `GEMINI_API_KEY` válida para el enriquecimiento en vivo.
+- El workflow 2 requiere conexión a Internet y la credencial `Header Auth account` con una clave válida de Gemini para el enriquecimiento en vivo.
 - Los workflows de n8n se importan manualmente; no se auto-importan al iniciar el contenedor.
 - La base SQLite es adecuada para docencia y demostración; para producción se recomienda PostgreSQL.
-- El frontend incluye un modo autónomo en memoria, útil para demo, pero sin persistencia real.
-- La clave de Gemini debe configurarse en `.env` **antes** de levantar los contenedores, porque n8n la lee al iniciar.
+- El frontend requiere el backend: no calcula el scoring ni guarda datos en memoria como fallback.
+- La clave de Gemini se configura en n8n (**Credentials → Header Auth account**) y no se guarda en `.env` ni en `compose.yaml`.
