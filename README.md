@@ -48,7 +48,7 @@ Diseñar e implementar una arquitectura desacoplada que:
 | **Frontend** | Streamlit (Python) | `8501` | Interfaz de usuario: postulaciones, alta de estudiantes/ofertas, historial y planes IA. |
 | **Backend** | FastAPI + SQLAlchemy (Python) | `8000` | API REST, validación de datos y persistencia SQLite; el scoring lo calcula n8n. |
 | **Base de datos** | SQLite | — | Persistencia en `backend/data/vinculacion.db` (volumen del host). |
-| **Automatización** | n8n | `5678` | Orquestación Low-Code: el Workflow 1 calcula el match y el Workflow 2 genera el plan IA. |
+| **Automatización** | n8n | `5678` | Orquestación Low-Code: el Workflow 1 calcula el match, el Workflow 2 genera el plan IA y el Workflow 3 envía la notificación por correo. |
 | **Motor de IA** | Google Gemini (credencial Header Auth en n8n) | — | Generación del plan formativo con el modelo fijo `gemini-3.1-flash-lite`. Si la credencial falta o falla la red, el plan no se genera y se informa el error. |
 
 ### Flujo funcional
@@ -67,7 +67,7 @@ Usuario (Streamlit)
                                     (skills faltantes) ──► Workflow 2 (Gemini)
                                                 │              │
                                                 │              └── POST /postulaciones/{id}/ia-feedback
-                                                │              └── Workflow 3 (notificación simulada)
+                                                │              └── Workflow 3 (envío de email SMTP)
                                                 │
                                     Respuesta: match + ia_feedback ──► Streamlit
 ```
@@ -80,7 +80,7 @@ El cálculo determinista se ejecuta en el Code node del Workflow 1 de n8n. El ba
 |---|---|---|
 | `n8n/workflow_1_prescoring.json` | `POST /webhook/postulacion` | Recibe el estudiante y la oferta completos, calcula el match en un Code node, persiste vía `/postulaciones/registrar` y llama al Workflow 2 si hay skills faltantes. |
 | `n8n/workflow_2_enriquecimiento_ia.json` | `POST /webhook/ia-enrichment` | Construye el prompt con las skills faltantes, llama a Gemini, guarda el feedback y lo devuelve al Workflow 1. |
-| `n8n/workflow_3_notificacion_reporte.json` | `POST /webhook/notificacion-reporte` | Simula el envío del informe al estudiante si existe feedback de IA. |
+| `n8n/workflow_3_notificacion_reporte.json` | `POST /webhook/notificacion-reporte` | Envía por correo electrónico (SMTP) el informe y plan de mejora en formato HTML al estudiante si existe feedback de IA. |
 
 ---
 
@@ -100,6 +100,7 @@ El cálculo determinista se ejecuta en el Code node del Workflow 1 de n8n. El ba
 - **Clave de API de Google Gemini** para generar planes con IA en vivo.
   Se obtiene gratis en <https://aistudio.google.com/>.
   Sin clave, el match se calcula igual y el plan IA se informa como no disponible.
+- **Cuenta SMTP (ej. Gmail con Contraseña de aplicación)** para el envío real de correos desde el Workflow 3.
 - **Python 3.11+** solo si se desea ejecutar los servicios sin Docker.
 
 > Con Docker **no es necesario instalar Python ni las dependencias** de `requirements.txt` en la máquina anfitriona.
@@ -129,7 +130,7 @@ Copy-Item .env.example .env
 cp .env.example .env
 ```
 
-No hace falta configurar Gemini en `.env`. La clave se carga en n8n:
+No hace falta configurar Gemini ni SMTP en `.env`. Las credenciales se cargan en n8n:
 
 1. Ir a **Credentials → Create New → Header Auth**.
 2. Nombre: `Header Auth account`; **Header Name:** `x-goog-api-key`; **Value:** tu clave de Google Gemini.
@@ -235,10 +236,13 @@ Los workflows **no se importan automáticamente**. Pasos:
    - `n8n/workflow_1_prescoring.json`
    - `n8n/workflow_2_enriquecimiento_ia.json`
    - `n8n/workflow_3_notificacion_reporte.json`
-4. Activar los tres workflows con el interruptor **Inactive → Active**.
+4. Configurar las credenciales en n8n (**Credentials → Create New**):
+   - **Google Gemini (`Header Auth`):** Nombre `Header Auth account`, **Header Name:** `x-goog-api-key`, **Value:** tu API key de Google Gemini (usada en el Workflow 2).
+   - **Correo saliente (`SMTP`):** Crear una credencial **SMTP** (por ejemplo con Gmail usando `smtp.gmail.com`, puerto `465`, SSL/TLS activo y una *Contraseña de aplicación*) y vincularla en el nodo **Send an Email** del **Workflow 3**.
+5. Activar los tres workflows con el interruptor **Inactive → Active**.
    - El workflow 3 debe estar activo para que el workflow 2 pueda invocarlo.
    - El workflow 2 debe estar activo para que el workflow 1 pueda invocarlo.
-5. Para la demostración desde el frontend: en la vista **Postulación**, seleccionar estudiante y oferta y pulsar **🚀 Calcular Compatibilidad Determinista**. La app llama a `/webhook/postulacion` (Workflow 1 en producción) y muestra el match y el plan IA.
+6. Para la demostración desde el frontend: en la vista **Postulación**, seleccionar estudiante y oferta y pulsar **🚀 Calcular Compatibilidad Determinista**. La app llama a `/webhook/postulacion` (Workflow 1 en producción), muestra el match y el plan IA, y envía el correo al estudiante.
 
 > El Workflow 2 usa la credencial `Header Auth account` (`x-goog-api-key`) y la URL fija de Gemini; no necesita variables de entorno ni `N8N_BLOCK_ENV_ACCESS_IN_NODE`.
 
@@ -281,7 +285,7 @@ Los workflows **no se importan automáticamente**. Pasos:
 ### 9.6 Automatización con n8n
 - El frontend dispara el Workflow 1 con los datos completos del estudiante y la oferta.
 - El Workflow 1 calcula el match, lo persiste y, si hay skills faltantes, llama al Workflow 2.
-- Enriquecimiento con IA y notificación simulada.
+- Enriquecimiento con IA y notificación real por correo electrónico vía SMTP (Workflow 3) con el plan de mejora en formato HTML.
 
 ### 9.7 Manejo de errores sin fallback offline
 - Si el backend o n8n no responden, el frontend muestra `frontend/pages/error.py` y permite volver al inicio.
@@ -400,7 +404,7 @@ Proyecto_A_Vinculacion_Profesional_TP/
 | `frontend/app.py` | Punto de entrada: configuración global, sidebar y navegación con `st.navigation`. |
 | `frontend/pages/` | Una vista por archivo (`main_page`, `postulacion`, `estudiantes`, `ofertas`, `historial`, `acerca`, `error`), cada una con `render()`. |
 | `frontend/common.py` | Estado de sesión y helpers de API compartidos. |
-| `.env.example` | Puertos y URLs. La clave de Gemini se configura en la credencial de n8n, no en `.env`. |
+| `.env.example` | Puertos y URLs. Las credenciales de Gemini y SMTP se configuran en n8n, no en `.env`. |
 
 ---
 
@@ -415,7 +419,7 @@ Proyecto_A_Vinculacion_Profesional_TP/
 | `DATABASE_URL` | `sqlite:///./data/vinculacion.db` | Cadena de conexión de SQLAlchemy. |
 | `BACKEND_API_URL` | `http://backend:8000` | URL interna del backend usada por el frontend. |
 
-> La clave y el modelo de Gemini no son variables de entorno: se configuran en la credencial `Header Auth account` y en el nodo HTTP Request del Workflow 2 de n8n.
+> La clave y el modelo de Gemini, así como la cuenta SMTP, no son variables de entorno: se configuran directamente en las credenciales de n8n.
 
 ---
 
@@ -426,6 +430,7 @@ Proyecto_A_Vinculacion_Profesional_TP/
 | El frontend muestra la página de error o “Backend desconectado”. | El backend aún no terminó de arrancar o falló. | `docker compose ps` y `docker compose logs backend`. Esperar el healthcheck. |
 | `port is already allocated`. | Otro proceso usa 8000/8501/5678. | Cambiar los puertos en `.env` o liberar el puerto. |
 | n8n no ejecuta el workflow 2. | Falta la credencial `Header Auth account` o el workflow 2 no está activo. | Crear/verificar la credencial en n8n (header `x-goog-api-key`) y activar el workflow. |
+| El workflow 3 falla al enviar el correo. | Falta configurar la credencial SMTP o el workflow 3 está inactivo. | Configurar la credencial SMTP en n8n, vincularla en el nodo `Send an Email` y activar el workflow. |
 | Error 404 al disparar el webhook de producción. | El workflow está inactivo. | Activar el workflow en n8n (Inactive → Active). |
 | Los datos no se guardan y aparece la página de error. | El backend está caído; no hay fallback en memoria. | Levantar el backend y verificar `/health`. |
 | El plan IA se genera pero no se guarda. | La postulación no existe en SQLite o el backend está caído. | Verificar que el match se haya calculado con el backend online. |
@@ -447,9 +452,9 @@ docker compose config
 ## 14. Notas y limitaciones
 
 - El scoring es **determinista** y no usa IA; el LLM solo redacta el plan formativo.
-- El envío de correo del workflow 3 es **simulado** (nodo Set); no se envía un email real.
+- El envío de correo del workflow 3 utiliza **SMTP** (nodo *Send an Email*) y requiere configurar una credencial SMTP válida en n8n para despachar los correos reales.
 - El workflow 2 requiere conexión a Internet y la credencial `Header Auth account` con una clave válida de Gemini para el enriquecimiento en vivo.
 - Los workflows de n8n se importan manualmente; no se auto-importan al iniciar el contenedor.
 - La base SQLite es adecuada para docencia y demostración; para producción se recomienda PostgreSQL.
 - El frontend requiere el backend: no calcula el scoring ni guarda datos en memoria como fallback.
-- La clave de Gemini se configura en n8n (**Credentials → Header Auth account**) y no se guarda en `.env` ni en `compose.yaml`.
+- Las credenciales de Gemini y SMTP se configuran en n8n (**Credentials**) y no se guardan en `.env` ni en `compose.yaml`.

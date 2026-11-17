@@ -8,28 +8,27 @@
         "responseMode": "responseNode",
         "options": {}
       },
-      "id": "node-webhook-trigger",
+      "id": "638dfdf4-793c-43c7-a309-e0a2fd04a5d9",
       "name": "Webhook: Nueva Postulacion",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1.1,
       "position": [
-        240,
-        300
+        0,
+        112
       ],
       "webhookId": "tp-postulacion-webhook"
     },
     {
       "parameters": {
-        "mode": "runOnceForAllItems",
         "jsCode": "const est = $json.body.estudiante || {};\nconst ofr = $json.body.oferta || {};\nconst norm = (s) => String(s || \"\").trim().toLowerCase();\nconst studentSkills = Array.isArray(est.skills) ? est.skills.map((s) => String(s).trim()).filter(Boolean) : [];\nconst requiredSkills = Array.isArray(ofr.skills_requeridas) ? ofr.skills_requeridas.map((s) => String(s).trim()).filter(Boolean) : [];\nconst studentSet = new Set(studentSkills.map(norm));\nconst matching = requiredSkills.filter((s) => studentSet.has(norm(s)));\nconst missing = requiredSkills.filter((s) => !studentSet.has(norm(s)));\nconst total = requiredSkills.length;\nconst scoring = total === 0 ? 0.0 : Math.round((matching.length / total) * 100 * 100) / 100;\nconst scoringText = Number.isInteger(scoring) ? scoring.toFixed(1) : String(scoring);\nconst formula = total === 0 ? \"(0 / 0) * 100 = 0.0%\" : `(${matching.length} / ${total}) * 100 = ${scoringText}%`;\nconst estado = scoring >= 70.0 ? \"Apta para entrevista\" : \"En desarrollo formativo\";\nreturn [{\n  json: {\n    estudiante_id: est.id,\n    estudiante_nombre: est.nombre || \"\",\n    estudiante_carrera: est.carrera || \"\",\n    oferta_id: ofr.id,\n    oferta_puesto: ofr.puesto || \"\",\n    empresa: ofr.empresa || \"\",\n    scoring,\n    skills_coincidentes: matching,\n    skills_faltantes: missing,\n    formula,\n    estado\n  }\n}];"
       },
-      "id": "node-calcular-match",
+      "id": "35818a1b-6069-40d7-91f9-5eaf161c1c54",
       "name": "Calcular Match Determinista",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        460,
-        300
+        224,
+        112
       ]
     },
     {
@@ -43,13 +42,13 @@
           "timeout": 10000
         }
       },
-      "id": "node-registrar-postulacion",
+      "id": "90ab1293-c904-4159-9321-6547aad6780a",
       "name": "Registrar Postulación en Backend",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        680,
-        300
+        448,
+        112
       ]
     },
     {
@@ -58,19 +57,18 @@
           "number": [
             {
               "value1": "={{ $json.skills_faltantes.length }}",
-              "operation": "larger",
-              "value2": 0
+              "operation": "larger"
             }
           ]
         }
       },
-      "id": "node-if-faltantes",
+      "id": "48e92c70-5436-4b96-9d73-1ec336caa1d6",
       "name": "¿Hay Skills Faltantes?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
       "position": [
-        900,
-        300
+        672,
+        112
       ]
     },
     {
@@ -79,47 +77,45 @@
         "url": "http://n8n:5678/webhook/ia-enrichment",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ postulacion_id: $('Registrar Postulación en Backend').item.json.postulacion_id, estudiante_id: $('Registrar Postulación en Backend').item.json.estudiante_id, estudiante_nombre: $('Registrar Postulación en Backend').item.json.estudiante_nombre, oferta_puesto: $('Registrar Postulación en Backend').item.json.oferta_puesto, empresa: $('Registrar Postulación en Backend').item.json.empresa, scoring: $('Registrar Postulación en Backend').item.json.scoring, skills_coincidentes: $('Registrar Postulación en Backend').item.json.skills_coincidentes, skills_faltantes: $('Registrar Postulación en Backend').item.json.skills_faltantes }) }}",
+        "jsonBody": "={{ JSON.stringify({ postulacion_id: $('Registrar Postulación en Backend').item.json.postulacion_id, estudiante_id: $('Registrar Postulación en Backend').item.json.estudiante_id, estudiante_nombre: $('Registrar Postulación en Backend').item.json.estudiante_nombre, estudiante_email: $('Webhook: Nueva Postulacion').item.json.body.estudiante.email, oferta_puesto: $('Registrar Postulación en Backend').item.json.oferta_puesto, empresa: $('Registrar Postulación en Backend').item.json.empresa, scoring: $('Registrar Postulación en Backend').item.json.scoring, skills_coincidentes: $('Registrar Postulación en Backend').item.json.skills_coincidentes, skills_faltantes: $('Registrar Postulación en Backend').item.json.skills_faltantes }) }}",
         "options": {
           "timeout": 90000
         }
       },
-      "id": "node-trigger-workflow-2",
+      "id": "ffbc0ee7-a851-4681-81e9-6f71c3e67a9f",
       "name": "Disparar Workflow 2 (Agente IA)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        1120,
-        200
+        880,
+        0
       ],
       "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "mode": "runOnceForAllItems",
         "jsCode": "const match = $('Registrar Postulación en Backend').item.json;\nconst ia = $json;\nconst iaError = ia && ia.error ? (ia.error.message || JSON.stringify(ia.error)) : null;\nreturn [{\n  json: {\n    ...match,\n    ia_feedback: iaError ? null : (ia.ia_feedback || null),\n    ia_origen: iaError ? null : (ia.ia_origen || null),\n    ia_error: iaError\n  }\n}];"
       },
-      "id": "node-preparar-respuesta-ia",
+      "id": "f9bc381d-a214-4d33-b2ad-0515522551d2",
       "name": "Preparar Respuesta con IA",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1340,
-        200
+        1104,
+        0
       ]
     },
     {
       "parameters": {
-        "mode": "runOnceForAllItems",
         "jsCode": "const match = $('Registrar Postulación en Backend').item.json;\nreturn [{\n  json: {\n    ...match,\n    ia_feedback: null,\n    ia_origen: null,\n    ia_error: null\n  }\n}];"
       },
-      "id": "node-preparar-respuesta-sin-ia",
+      "id": "d3a87d09-c157-40ff-84c9-51bda7e5d922",
       "name": "Preparar Respuesta sin IA",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1120,
-        400
+        880,
+        208
       ]
     },
     {
@@ -128,16 +124,17 @@
         "responseBody": "={{ JSON.stringify($json) }}",
         "options": {}
       },
-      "id": "node-respond-webhook",
+      "id": "18f29ec7-2d11-45c7-8cad-e914a577a524",
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
       "position": [
-        1560,
-        300
+        1328,
+        112
       ]
     }
   ],
+  "pinData": {},
   "connections": {
     "Webhook: Nueva Postulacion": {
       "main": [
@@ -224,5 +221,16 @@
       ]
     }
   },
-  "settings": {}
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "9f681225-da0f-4e8b-a6e5-c81484a354d8",
+  "meta": {
+    "instanceId": "55af52e53303c8a8c964adaffbc933383cabecd4a9550f0a2d379d615e03a837"
+  },
+  "nodeGroups": [],
+  "id": "pTaxEPQ2WlT8ZmbT",
+  "tags": []
 }

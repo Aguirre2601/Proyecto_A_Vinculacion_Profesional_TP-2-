@@ -8,13 +8,13 @@
         "responseMode": "responseNode",
         "options": {}
       },
-      "id": "node-w2-trigger",
+      "id": "db5a32c7-21f9-446b-83eb-e761872d71e4",
       "name": "Webhook: Necesita Plan de Mejora",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1.1,
       "position": [
-        240,
-        300
+        0,
+        0
       ],
       "webhookId": "tp-ia-enrichment-webhook"
     },
@@ -30,13 +30,13 @@
         },
         "options": {}
       },
-      "id": "node-armar-prompt",
+      "id": "305f5586-64a0-41a0-a639-c5fe4a07282e",
       "name": "Armar Prompt con Skills Faltantes",
       "type": "n8n-nodes-base.set",
       "typeVersion": 2,
       "position": [
-        460,
-        300
+        224,
+        0
       ]
     },
     {
@@ -52,20 +52,20 @@
           "timeout": 60000
         }
       },
-      "id": "node-llm-call",
+      "id": "0da7ec44-29ef-4bc5-b59d-3ad5e1f722ad",
       "name": "HTTP Request: LLM Gemini / Ollama",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
+      "position": [
+        448,
+        0
+      ],
       "credentials": {
         "httpHeaderAuth": {
-          "id": "tRgxbBB45n5mrOcZ",
+          "id": "HT8LKjMMIHF5wRVD",
           "name": "Header Auth account"
         }
-      },
-      "position": [
-        680,
-        300
-      ]
+      }
     },
     {
       "parameters": {
@@ -78,13 +78,13 @@
           "timeout": 10000
         }
       },
-      "id": "node-save-feedback",
+      "id": "c2d51db4-1d5f-4f55-b21d-feed17b99977",
       "name": "HTTP Request: POST /postulaciones/{id}/ia-feedback",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        920,
-        300
+        688,
+        0
       ]
     },
     {
@@ -93,16 +93,16 @@
         "url": "http://n8n:5678/webhook/notificacion-reporte",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ postulacion_id: $('Webhook: Necesita Plan de Mejora').item.json.body.postulacion_id, estudiante_nombre: $('Webhook: Necesita Plan de Mejora').item.json.body.estudiante_nombre, oferta_puesto: $('Webhook: Necesita Plan de Mejora').item.json.body.oferta_puesto, feedback: $('HTTP Request: POST /postulaciones/{id}/ia-feedback').item.json.ia_feedback }) }}",
+        "jsonBody": "={{ JSON.stringify({ postulacion_id: $('Webhook: Necesita Plan de Mejora').item.json.body.postulacion_id, estudiante_nombre: $('Webhook: Necesita Plan de Mejora').item.json.body.estudiante_nombre, estudiante_email: $('Webhook: Necesita Plan de Mejora').item.json.body.estudiante_email, oferta_puesto: $('Webhook: Necesita Plan de Mejora').item.json.body.oferta_puesto, feedback: $('HTTP Request: POST /postulaciones/{id}/ia-feedback').item.json.ia_feedback }) }}",
         "options": {}
       },
-      "id": "node-trigger-workflow-3",
+      "id": "4c22192e-31ae-42ce-a3b2-47731a384e08",
       "name": "Disparar Workflow 3 (Notificación)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        1140,
-        300
+        912,
+        0
       ]
     },
     {
@@ -111,16 +111,17 @@
         "responseBody": "={{ JSON.stringify({ status: \"enriquecido\", postulacion_id: $('Webhook: Necesita Plan de Mejora').item.json.body.postulacion_id, feedback_guardado: true, ia_feedback: $('HTTP Request: POST /postulaciones/{id}/ia-feedback').item.json.ia_feedback, ia_origen: \"Google Gemini gemini-3.1-flash-lite\" }) }}",
         "options": {}
       },
-      "id": "node-w2-respond",
+      "id": "1efcddbd-7395-4d54-9046-fbcc6696b40a",
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
       "position": [
-        1360,
-        300
+        1120,
+        0
       ]
     }
   ],
+  "pinData": {},
   "connections": {
     "Webhook: Necesita Plan de Mejora": {
       "main": [
@@ -178,5 +179,16 @@
       ]
     }
   },
-  "settings": {}
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "53b9aed3-0621-48f6-a188-181df31ead01",
+  "meta": {
+    "instanceId": "55af52e53303c8a8c964adaffbc933383cabecd4a9550f0a2d379d615e03a837"
+  },
+  "nodeGroups": [],
+  "id": "7riO93JOG3Q4F8jW",
+  "tags": []
 }
