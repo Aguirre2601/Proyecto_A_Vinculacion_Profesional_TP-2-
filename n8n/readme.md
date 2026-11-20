@@ -1,14 +1,14 @@
 # Workflows de n8n
 
-Automatización del flujo de postulaciones: pre-scoring determinista, enriquecimiento con IA y notificación simulada.
+Automatización del flujo de postulaciones: pre-scoring determinista, enriquecimiento con IA y notificación por correo electrónico (SMTP).
 
-**Requisitos:** credencial **Header Auth account** (`x-goog-api-key`) con una clave válida de Gemini; workflows importados y **Active**. No se usan variables `GEMINI_*` ni `N8N_BLOCK_ENV_ACCESS_IN_NODE`. Dependencia: Workflow 3 activo ← Workflow 2 ← Workflow 1.
+**Requisitos:** credencial **Header Auth account** (`x-goog-api-key`) con una clave válida de Gemini, credencial **SMTP** configurada para el envío de correos (vinculada en el nodo `Send an Email` del Workflow 3), y los workflows importados y **Active**. No se usan variables `GEMINI_*` ni `N8N_BLOCK_ENV_ACCESS_IN_NODE`. Dependencia: Workflow 3 activo ← Workflow 2 ← Workflow 1.
 
 | Workflow | Webhook | Acción |
 |---|---|---|
 | 1. Pre-scoring | `POST /webhook/postulacion` | Calcula el match en un Code node, lo persiste vía `/postulaciones/registrar` y, si hay skills faltantes, llama al Workflow 2 |
-| 2. Enriquecimiento IA | `POST /webhook/ia-enrichment` | Genera el plan con Gemini, lo guarda y devuelve `ia_feedback` al Workflow 1 |
-| 3. Notificación | `POST /webhook/notificacion-reporte` | Simula el envío del informe |
+| 2. Enriquecimiento IA | `POST /webhook/ia-enrichment` | Genera el plan con Gemini, lo guarda, dispara el Workflow 3 y devuelve `ia_feedback` al Workflow 1 |
+| 3. Notificación | `POST /webhook/notificacion-reporte` | Envía por correo electrónico (SMTP) el informe en formato HTML al estudiante |
 
 ---
 
@@ -23,6 +23,7 @@ Automatización del flujo de postulaciones: pre-scoring determinista, enriquecim
   "estudiante": {
     "id": 1,
     "nombre": "Valeria Gómez",
+    "email": "valeria.gomez@universidad.edu.ar",
     "carrera": "Ingeniería en Sistemas",
     "skills": ["Python", "SQL", "FastAPI", "Git"]
   },
@@ -35,7 +36,7 @@ Automatización del flujo de postulaciones: pre-scoring determinista, enriquecim
 }
 ```
 
-**3. Validación y transformación:** el Code node `Calcular Match Determinista` normaliza las skills (minúsculas y `trim`), calcula la intersección, las faltantes y el scoring con la fórmula determinista del proyecto. Luego `Registrar Postulación en Backend` llama a `POST http://backend:8000/postulaciones/registrar` para persistir el resultado y obtener `postulacion_id`. El IF `¿Hay Skills Faltantes?` evalúa `skills_faltantes.length > 0`; si hay brechas, llama al Workflow 2 con `postulacion_id`, `estudiante_id`, `estudiante_nombre`, `oferta_puesto`, `empresa`, `scoring`, `skills_coincidentes` y `skills_faltantes`. Si no hay brechas, responde directamente sin IA.
+**3. Validación y transformación:** el Code node `Calcular Match Determinista` normaliza las skills (minúsculas y `trim`), calcula la intersección, las faltantes y el scoring con la fórmula determinista del proyecto. Luego `Registrar Postulación en Backend` llama a `POST http://backend:8000/postulaciones/registrar` para persistir el resultado y obtener `postulacion_id`. El IF `¿Hay Skills Faltantes?` evalúa `skills_faltantes.length > 0`; si hay brechas, llama al Workflow 2 con `postulacion_id`, `estudiante_id`, `estudiante_nombre`, `estudiante_email`, `oferta_puesto`, `empresa`, `scoring`, `skills_coincidentes` y `skills_faltantes`. Si no hay brechas, responde directamente sin IA.
 
 **4. Respuesta devuelta:** incluye el match y, si se ejecutó el Workflow 2, el plan formativo:
 
@@ -73,6 +74,7 @@ Automatización del flujo de postulaciones: pre-scoring determinista, enriquecim
   "postulacion_id": 1,
   "estudiante_id": 1,
   "estudiante_nombre": "Valeria Gómez",
+  "estudiante_email": "valeria.gomez@universidad.edu.ar",
   "oferta_puesto": "Backend Junior",
   "empresa": "Fintech Innova",
   "scoring": 60.0,
@@ -81,7 +83,7 @@ Automatización del flujo de postulaciones: pre-scoring determinista, enriquecim
 }
 ```
 
-**3. Validación y transformación:** el nodo Set construye `prompt_construido` con los datos y las skills faltantes. Luego se llama a Gemini (`/v1beta/models/gemini-3.1-flash-lite:generateContent`) usando la credencial `Header Auth account` (`x-goog-api-key`), sin clave en la URL, con un body JSON seguro (`JSON.stringify`). El texto generado se envía a `POST http://backend:8000/postulaciones/{id}/ia-feedback`; el backend valida con Pydantic (`IAFeedbackRequest`, mínimo 5 caracteres) y verifica que la postulación exista. Finalmente se dispara el Workflow 3. El prompt de n8n es una versión reducida del usado en el frontend: no incluye carrera ni recursos gratuitos.
+**3. Validación y transformación:** el nodo Set construye `prompt_construido` con los datos y las skills faltantes. Luego se llama a Gemini (`/v1beta/models/gemini-3.1-flash-lite:generateContent`) usando la credencial `Header Auth account` (`x-goog-api-key`), sin clave en la URL, con un body JSON seguro (`JSON.stringify`). El texto generado se envía a `POST http://backend:8000/postulaciones/{id}/ia-feedback`; el backend valida con Pydantic (`IAFeedbackRequest`, mínimo 5 caracteres) y verifica que la postulación exista. Finalmente se dispara el Workflow 3 enviando `postulacion_id`, `estudiante_nombre`, `estudiante_email`, `oferta_puesto` y `feedback`. El prompt de n8n es una versión reducida del usado en el frontend: no incluye carrera ni recursos gratuitos.
 
 **4. Respuesta devuelta:** incluye el texto del plan para que el Workflow 1 lo devuelva al frontend:
 
@@ -109,46 +111,46 @@ Automatización del flujo de postulaciones: pre-scoring determinista, enriquecim
 {
   "postulacion_id": 1,
   "estudiante_nombre": "Valeria Gómez",
+  "estudiante_email": "valeria.gomez@universidad.edu.ar",
   "oferta_puesto": "Backend Junior",
   "feedback": "### Diagnóstico de Brecha Formativa..."
 }
 ```
 
-**3. Validación y transformación:** el nodo IF comprueba que `body.feedback` no esté vacío. Si existe, el Set arma `correo_asunto`, `correo_cuerpo_html` y `estado_envio = "SIMULADO_ENVIADO_EXITOSAMENTE"`. Si no existe, devuelve `estado_envio = "OMITIDO_SIN_FEEDBACK"` y un `motivo`. No se envía un correo real.
+**3. Validación y transformación:** el nodo IF comprueba que `body.feedback` no esté vacío. Si existe, el nodo **Send an Email** despacha el correo electrónico vía **SMTP** al destinatario (`body.estudiante_email`) con el asunto `Tu Plan de Formación - Postulación #{postulacion_id}` y el cuerpo en formato HTML con el plan de mejora. Si no existe feedback, la rama `false` pasa por el nodo Set `Omitir Envío`, que devuelve `estado_envio = "OMITIDO_SIN_FEEDBACK"` y un `motivo`.
 
 **4. Respuesta devuelta:**
+
+Tras el envío exitoso del correo por SMTP, `Respond to Webhook` devuelve la confirmación de ejecución del nodo `Send an Email`. Sin feedback, devuelve:
 
 ```json
 {
   "status": "completado",
   "resultado": {
-    "correo_asunto": "Tu Plan Personalizado de Desarrollo Profesional - Postulación #1",
-    "correo_cuerpo_html": "<div>...</div>",
-    "estado_envio": "SIMULADO_ENVIADO_EXITOSAMENTE"
+    "estado_envio": "OMITIDO_SIN_FEEDBACK",
+    "motivo": "No se generó feedback de IA para esta postulación."
   }
 }
 ```
 
-Sin feedback, `resultado` contiene `estado_envio: "OMITIDO_SIN_FEEDBACK"` y `motivo`.
-
-**5. Reconocimiento de fallas:** la rama sin feedback no es un error, es una bifurcación de negocio. Un body inválido hace fallar el webhook. Al no enviarse correos reales no hay errores SMTP. Sin rama de error ni logging propio; se consulta **Executions**.
+**5. Reconocimiento de fallas:** la rama sin feedback no es un error, es una bifurcación de negocio. Si falta la credencial SMTP, las credenciales de correo son inválidas o el campo `estudiante_email` llega vacío (`No recipients defined`), el nodo **Send an Email** detiene la ejecución y el error queda registrado en **Executions** y en `docker compose logs n8n`.
 
 ---
 
 ## Fallas generales y pruebas
 
-Los workflows usan el manejo por defecto de n8n: un HTTP no-2xx detiene la ejecución, que queda registrada en **Executions**. La excepción es el nodo `Disparar Workflow 2` del Workflow 1, que usa `onError: continueRegularOutput` para devolver el match aunque falle la IA. Los logs se ven con `docker compose logs -f n8n`.
+Los workflows usan el manejo por defecto de n8n: un HTTP no-2xx o un error de envío SMTP detiene la ejecución, que queda registrada en **Executions**. La excepción es el nodo `Disparar Workflow 2` del Workflow 1, que usa `onError: continueRegularOutput` para devolver el match aunque falle la IA. Los logs se ven con `docker compose logs -f n8n`.
 
 ```bash
 # Workflow 1 (enviar los objetos completos del estudiante y la oferta)
 curl -X POST http://localhost:5678/webhook/postulacion \
   -H "Content-Type: application/json" \
-  -d '{"estudiante":{"id":1,"nombre":"Valeria Gómez","carrera":"Ingeniería en Sistemas","skills":["Python","SQL","FastAPI","Git"]},"oferta":{"id":1,"puesto":"Backend Junior","empresa":"Fintech Innova","skills_requeridas":["Python","FastAPI","Docker","PostgreSQL","Git"]}}'
+  -d '{"estudiante":{"id":1,"nombre":"Valeria Gómez","email":"valeria.gomez@universidad.edu.ar","carrera":"Ingeniería en Sistemas","skills":["Python","SQL","FastAPI","Git"]},"oferta":{"id":1,"puesto":"Backend Junior","empresa":"Fintech Innova","skills_requeridas":["Python","FastAPI","Docker","PostgreSQL","Git"]}}'
 
 # Workflow 3
 curl -X POST http://localhost:5678/webhook/notificacion-reporte \
   -H "Content-Type: application/json" \
-  -d '{"postulacion_id":1,"estudiante_nombre":"Valeria","oferta_puesto":"Backend","feedback":"Plan de prueba"}'
+  -d '{"postulacion_id":1,"estudiante_nombre":"Valeria","estudiante_email":"valeria.gomez@universidad.edu.ar","oferta_puesto":"Backend","feedback":"Plan de prueba"}'
 ```
 
 Para modo test usar `/webhook-test/...` y hacer clic antes en **Test workflow**.

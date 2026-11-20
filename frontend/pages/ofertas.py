@@ -7,8 +7,19 @@ import streamlit as st
 from common import api_online, get_backend_url, ir_a_error, obtener_ofertas
 
 
+SKILLS_SUGERIDAS = [
+    "Python", "Java", "JavaScript", "TypeScript", "C", "C++", "C#", "Go", "Rust",
+    "PHP", "Ruby", "Kotlin", "Swift", "HTML", "CSS", "React", "Angular", "Vue",
+    "Node.js", "FastAPI", "Django", "Flask", "Spring Boot", "SQL", "PostgreSQL",
+    "MySQL", "SQLite", "MongoDB", "Redis", "Docker", "Kubernetes", "Git", "GitHub",
+    "Linux", "Windows", "AWS", "Azure", "Google Cloud", "REST API", "GraphQL",
+    "Pandas", "NumPy", "Machine Learning", "Data Analysis", "Power BI", "Excel",
+    "Figma", "Scrum", "Agile", "Testing", "CI/CD"
+]
+
+
 def render():
-    """Renderiza la vista de publicación y consulta de ofertas."""
+    """Renderiza la vista de publicación y consulta."""
     online = api_online()
     backend_url = get_backend_url()
 
@@ -19,16 +30,19 @@ def render():
         with st.form("form_oferta", clear_on_submit=True):
             o_puesto = st.text_input("Título del Puesto", placeholder="Ej. Backend Developer Python Jr")
             o_empresa = st.text_input("Empresa", placeholder="Ej. Globant")
-            o_skills_raw = st.text_area(
-                "Habilidades Requeridas (separadas por coma)",
-                placeholder="Python, FastAPI, Docker, PostgreSQL, Git"
+            skills_req = st.multiselect(
+                "Habilidades Requeridas",
+                options=SKILLS_SUGERIDAS,
+                accept_new_options=True,
+                placeholder="Seleccioná o escribí una habilidad y presioná Enter",
+                help="Podés elegir habilidades sugeridas, escribir otras nuevas y eliminar etiquetas individualmente."
             )
             o_desc = st.text_area("Descripción de la posición (opcional)")
 
             sub_ofr = st.form_submit_button("Publicar Oferta", type="primary")
             if sub_ofr:
-                skills_req = [s.strip() for s in o_skills_raw.split(",") if s.strip()]
-                if not o_puesto or not o_empresa or not skills_req:
+                skills_req = [s.strip() for s in skills_req if s and s.strip()]
+                if not o_puesto.strip() or not o_empresa.strip() or not skills_req:
                     st.error("Puesto, empresa y al menos una habilidad requerida son obligatorios.")
                 else:
                     payload_ofr = {
@@ -48,17 +62,6 @@ def render():
                                 st.error(f"❌ Error al publicar ({resp_ofr.status_code}): {resp_ofr.text}")
                         except Exception as ex:
                             ir_a_error(ex, "No se pudo publicar la oferta")
-                    # Fallback en memoria deshabilitado: sin backend no se guarda.
-                    # else:
-                    #     nueva_ofr_local = {
-                    #         "id": len(st.session_state.ofertas) + 1,
-                    #         "puesto": o_puesto.strip(),
-                    #         "empresa": o_empresa.strip(),
-                    #         "skills_requeridas": skills_req,
-                    #         "descripcion": o_desc.strip() if o_desc else ""
-                    #     }
-                    #     st.session_state.ofertas.append(nueva_ofr_local)
-                    #     st.warning("Oferta guardada SOLO TEMPORALMENTE en RAM.")
                     else:
                         ir_a_error("Backend desconectado", "No se puede publicar la oferta")
 
