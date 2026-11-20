@@ -7,6 +7,17 @@ import streamlit as st
 from common import api_online, get_backend_url, ir_a_error, obtener_estudiantes
 
 
+SKILLS_SUGERIDAS = [
+    "Python", "Java", "JavaScript", "TypeScript", "C", "C++", "C#", "Go", "Rust",
+    "PHP", "Ruby", "Kotlin", "Swift", "HTML", "CSS", "React", "Angular", "Vue",
+    "Node.js", "FastAPI", "Django", "Flask", "Spring Boot", "SQL", "PostgreSQL",
+    "MySQL", "SQLite", "MongoDB", "Redis", "Docker", "Kubernetes", "Git", "GitHub",
+    "Linux", "Windows", "AWS", "Azure", "Google Cloud", "REST API", "GraphQL",
+    "Pandas", "NumPy", "Machine Learning", "Data Analysis", "Power BI", "Excel",
+    "Figma", "Scrum", "Agile", "Testing", "CI/CD"
+]
+
+
 def render():
     """Renderiza la vista de registro y listado de estudiantes."""
     online = api_online()
@@ -28,15 +39,18 @@ def render():
                 "Ingeniería Electrónica"
             ]
         )
-        f_skills_raw = st.text_area(
-            "Habilidades / Tecnologías (separadas por coma)",
-            placeholder="Python, FastAPI, Docker, SQL, Git, Linux"
+        skills_list = st.multiselect(
+            "Habilidades / Tecnologías",
+            options=SKILLS_SUGERIDAS,
+            accept_new_options=True,
+            placeholder="Seleccioná o escribí una habilidad y presioná Enter",
+            help="Podés elegir habilidades sugeridas, escribir otras nuevas y eliminar etiquetas individualmente."
         )
 
         submitted = st.form_submit_button("Guardar Estudiante", type="primary")
         if submitted:
-            skills_list = [s.strip() for s in f_skills_raw.split(",") if s.strip()]
-            if not f_nombre or not f_email or not skills_list:
+            skills_list = [s.strip() for s in skills_list if s and s.strip()]
+            if not f_nombre.strip() or not f_email.strip() or not skills_list:
                 st.error("Por favor completa todos los campos obligatorios y al menos una habilidad.")
             else:
                 email_limpio = f_email.strip().lower()
@@ -64,17 +78,6 @@ def render():
                             st.error(f"❌ Error en Backend ({resp.status_code}): {resp.text}")
                     except Exception as ex:
                         ir_a_error(ex, "No se pudo guardar el estudiante")
-                # Fallback en memoria deshabilitado: sin backend no se guarda.
-                # else:
-                #     nuevo_local = {
-                #         "id": len(st.session_state.estudiantes) + 1,
-                #         "nombre": f_nombre.strip(),
-                #         "email": email_limpio,
-                #         "carrera": f_carrera,
-                #         "skills": skills_list
-                #     }
-                #     st.session_state.estudiantes.append(nuevo_local)
-                #     st.warning("Estudiante guardado SOLO TEMPORALMENTE en memoria RAM.")
                 else:
                     ir_a_error("Backend desconectado", "No se puede guardar el estudiante")
 
