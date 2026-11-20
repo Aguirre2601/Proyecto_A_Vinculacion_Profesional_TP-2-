@@ -11,7 +11,7 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - IA configurada en n8n: credencial `Header Auth account` (`httpHeaderAuth`, id `tRgxbBB45n5mrOcZ`, header `x-goog-api-key`) y modelo fijo `gemini-3.1-flash-lite` en la URL del nodo HTTP Request del Workflow 2. No hay variables `GEMINI_*` en `.env`, `.env.example` ni `compose.yaml`.
 - `n8n/readme.md` documenta los 3 workflows (evento, datos, validación, respuesta y fallas); cada descripción queda bajo 500 palabras.
 - `README1.md` y `prompts/` fueron eliminados; `AGENTS.md` ya no los referencia.
-- `README.md` actualizado con la estructura actual (`backend/app/...`, `frontend/pages/`, `st.navigation`) y la configuración de Gemini en n8n.
+- `README.md` actualizado con la estructura actual (`backend/app/...`, `frontend/pages/`, `st.navigation`) y la configuración de Gemini en n8n; `BitacoraIA.md` completado con 3 mensajes de la sesión.
 - Contenedores recreados sin variables `GEMINI_*`; backend/frontend healthy y n8n responde 200. El Workflow 2 activo (`2T30jWBDDKcEejwI`) usa Header Auth y la URL fija de Gemini.
 - Flujo completo probado tras el cambio a Header Auth: el Workflow 1 calcula el match, persiste y el Workflow 2 devuelve `ia_feedback` con `ia_origen: Google Gemini gemini-3.1-flash-lite` (Valeria vs Backend: 60% + plan real). La credencial `Header Auth account` tenía el header `KeyLowCode`; se corrigió a `x-goog-api-key`. Quedan 3 workflows activos: `j0jBbSZYQFeF4b1q` (W1), `2T30jWBDDKcEejwI` (W2) y `gM14StIzDBM91hH3` (W3).
 

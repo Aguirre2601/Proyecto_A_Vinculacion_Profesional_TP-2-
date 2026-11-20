@@ -112,7 +112,7 @@ El cálculo determinista se ejecuta en el Code node del Workflow 1 de n8n. El ba
 ### 6.1 Obtener el proyecto
 
 ```bash
-git clone <URL_DEL_REPOSITORIO>
+git clone <https://github.com/Aguirre2601/Proyecto_A_Vinculacion_Profesional_TP-2-.git>
 cd "Proyecto_A_Vinculacion_Profesional_TP"
 ```
 
