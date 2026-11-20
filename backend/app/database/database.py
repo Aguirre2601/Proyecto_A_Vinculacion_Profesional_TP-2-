@@ -16,7 +16,7 @@ if "sqlite" in DATABASE_URL:
         try:
             os.makedirs(db_dir, exist_ok=True)
         except Exception:
-            pass #CHEQUEAR, no deberiamos manejar este posible error
+            pass 
 
 # create_engine con connect_args para SQLite multihilo seguro
 engine = create_engine(
