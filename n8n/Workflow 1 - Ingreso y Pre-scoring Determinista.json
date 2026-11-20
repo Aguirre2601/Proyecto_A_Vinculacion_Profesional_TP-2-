@@ -8,7 +8,7 @@
         "responseMode": "responseNode",
         "options": {}
       },
-      "id": "638dfdf4-793c-43c7-a309-e0a2fd04a5d9",
+      "id": "31b91352-c74a-4f36-99e2-9432e93b5019",
       "name": "Webhook: Nueva Postulacion",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1.1,
@@ -22,7 +22,7 @@
       "parameters": {
         "jsCode": "const est = $json.body.estudiante || {};\nconst ofr = $json.body.oferta || {};\nconst norm = (s) => String(s || \"\").trim().toLowerCase();\nconst studentSkills = Array.isArray(est.skills) ? est.skills.map((s) => String(s).trim()).filter(Boolean) : [];\nconst requiredSkills = Array.isArray(ofr.skills_requeridas) ? ofr.skills_requeridas.map((s) => String(s).trim()).filter(Boolean) : [];\nconst studentSet = new Set(studentSkills.map(norm));\nconst matching = requiredSkills.filter((s) => studentSet.has(norm(s)));\nconst missing = requiredSkills.filter((s) => !studentSet.has(norm(s)));\nconst total = requiredSkills.length;\nconst scoring = total === 0 ? 0.0 : Math.round((matching.length / total) * 100 * 100) / 100;\nconst scoringText = Number.isInteger(scoring) ? scoring.toFixed(1) : String(scoring);\nconst formula = total === 0 ? \"(0 / 0) * 100 = 0.0%\" : `(${matching.length} / ${total}) * 100 = ${scoringText}%`;\nconst estado = scoring >= 70.0 ? \"Apta para entrevista\" : \"En desarrollo formativo\";\nreturn [{\n  json: {\n    estudiante_id: est.id,\n    estudiante_nombre: est.nombre || \"\",\n    estudiante_carrera: est.carrera || \"\",\n    oferta_id: ofr.id,\n    oferta_puesto: ofr.puesto || \"\",\n    empresa: ofr.empresa || \"\",\n    scoring,\n    skills_coincidentes: matching,\n    skills_faltantes: missing,\n    formula,\n    estado\n  }\n}];"
       },
-      "id": "35818a1b-6069-40d7-91f9-5eaf161c1c54",
+      "id": "076a123b-9ae5-4e0d-b42f-e12050362ba6",
       "name": "Calcular Match Determinista",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -42,7 +42,7 @@
           "timeout": 10000
         }
       },
-      "id": "90ab1293-c904-4159-9321-6547aad6780a",
+      "id": "6328d81f-3999-41ae-b93f-236f92168e5c",
       "name": "Registrar Postulación en Backend",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
@@ -54,15 +54,18 @@
     {
       "parameters": {
         "conditions": {
-          "number": [
+          "number": [],
+          "string": [
             {
-              "value1": "={{ $json.skills_faltantes.length }}",
-              "operation": "larger"
+              "value1": "={{ $json.estado }}",
+              "operation": "notEqual",
+              "value2": "Apta para entrevista"
             }
-          ]
+          ],
+          "boolean": []
         }
       },
-      "id": "48e92c70-5436-4b96-9d73-1ec336caa1d6",
+      "id": "dced17bf-52fe-4708-a618-b20cb09a2b87",
       "name": "¿Hay Skills Faltantes?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
@@ -82,7 +85,7 @@
           "timeout": 90000
         }
       },
-      "id": "ffbc0ee7-a851-4681-81e9-6f71c3e67a9f",
+      "id": "3eca5c9f-88e5-4f68-97b7-e5e952285f7e",
       "name": "Disparar Workflow 2 (Agente IA)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
@@ -96,7 +99,7 @@
       "parameters": {
         "jsCode": "const match = $('Registrar Postulación en Backend').item.json;\nconst ia = $json;\nconst iaError = ia && ia.error ? (ia.error.message || JSON.stringify(ia.error)) : null;\nreturn [{\n  json: {\n    ...match,\n    ia_feedback: iaError ? null : (ia.ia_feedback || null),\n    ia_origen: iaError ? null : (ia.ia_origen || null),\n    ia_error: iaError\n  }\n}];"
       },
-      "id": "f9bc381d-a214-4d33-b2ad-0515522551d2",
+      "id": "afab9f52-3536-4e82-84e9-efedfcc0a684",
       "name": "Preparar Respuesta con IA",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -109,7 +112,7 @@
       "parameters": {
         "jsCode": "const match = $('Registrar Postulación en Backend').item.json;\nreturn [{\n  json: {\n    ...match,\n    ia_feedback: null,\n    ia_origen: null,\n    ia_error: null\n  }\n}];"
       },
-      "id": "d3a87d09-c157-40ff-84c9-51bda7e5d922",
+      "id": "dc52d4e4-fb47-4899-97a1-572f8c6a9ceb",
       "name": "Preparar Respuesta sin IA",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -124,7 +127,7 @@
         "responseBody": "={{ JSON.stringify($json) }}",
         "options": {}
       },
-      "id": "18f29ec7-2d11-45c7-8cad-e914a577a524",
+      "id": "ece20c15-bd18-4b12-bf9c-6c337377644f",
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
@@ -226,11 +229,11 @@
     "executionOrder": "v1",
     "binaryMode": "separate"
   },
-  "versionId": "9f681225-da0f-4e8b-a6e5-c81484a354d8",
+  "versionId": "cd076843-a881-4372-8be2-d2bae39a8623",
   "meta": {
-    "instanceId": "55af52e53303c8a8c964adaffbc933383cabecd4a9550f0a2d379d615e03a837"
+    "instanceId": "0fcd497052fbb38fd725d10e9f6850b25f225c905d55eadc94c64bf922341969"
   },
   "nodeGroups": [],
-  "id": "pTaxEPQ2WlT8ZmbT",
+  "id": "5NYN3BoIqrHewBn3",
   "tags": []
 }
